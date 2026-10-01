@@ -1,0 +1,34 @@
+Intune Report Builder
+Copyright 2026 Orynr LLC
+
+Designed and developed by Sai Kamal Doss (SKDOSS) for Orynr LLC.
+https://orynr.com · info@orynr.com
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+If you redistribute Intune Report Builder or a work derived from it, section 4 of
+the License requires you to keep this NOTICE file (or its contents), keep the
+copyright and license notices, and mark any files you changed.
+
+
+ATTRIBUTION
+
+Please credit "Intune Report Builder by Orynr, developed by Sai Kamal Doss (SKDOSS)"
+in any product, documentation or service that uses or is derived from this work.
+
+
+TRADEMARKS
+
+"Orynr" and the Orynr "OR" logo (frontend/brand/) are trademarks of Orynr LLC.
+The Apache License does not grant permission to use them (section 6), other than
+to describe the origin of the work and in this NOTICE. Derived products must not
+present themselves as Orynr products.
+
+Microsoft, Intune, Entra and Excel are trademarks of the Microsoft group of
+companies. Intune Report Builder is not affiliated with or endorsed by Microsoft.
+
+
+THIRD-PARTY COMPONENTS
+
+The installed application bundles the Python runtime and open-source libraries,
+each under its own license. They are listed, with their license texts, in the
+THIRD_PARTY_LICENSES folder installed with the application.
