@@ -1,4 +1,4 @@
-/* Copyright 2026 Orynr LLC. Developed by Sai Kamal Doss (SKDOSS).
+/* Copyright 2026 Orynr LLC. Developed by SKDOSS.
    Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
    SPDX-License-Identifier: Apache-2.0 */
 /* Reports page. Hash routes:
@@ -177,6 +177,8 @@
     if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
     if (type === 'date') { const ms = dateMs(raw); return ms ? fmtDate(ms) : String(raw); }
     if (type === 'bytes') return (raw / GB).toFixed(1) + ' GB';
+    // Windows/Intune error codes are recognised in hex (0x87D1041C), not as large negative numbers.
+    if (type === 'number' && /error ?code|hresult/i.test(key) && raw) return '0x' + (raw >>> 0).toString(16).toUpperCase().padStart(8, '0');
     if (type === 'number') return fmtNum(raw);
     if (Array.isArray(raw)) return raw.map(x => listItemText(key, x)).join(', ');
     if (typeof raw === 'object') return JSON.stringify(raw);
@@ -217,6 +219,7 @@
     isfalse: { label: 'is No', input: null },
     olderThan: { label: 'is more than … days ago (or never)', short: 'more than', input: 'days' },
     newerThan: { label: 'is within the last … days', short: 'within the last', input: 'days' },
+    withinNext: { label: 'is within the next … days (or already past)', short: 'within the next', input: 'days' },
     gt: { label: 'is more than', input: 'number' },
     lt: { label: 'is less than', input: 'number' },
     empty: { label: 'is empty', input: null },
@@ -228,7 +231,7 @@
     enum: ['eq', 'ne', 'in', 'notin', 'contains', 'empty', 'notempty'],
     list: ['contains', 'notcontains', 'empty', 'notempty'],
     bool: ['istrue', 'isfalse', 'empty'],
-    date: ['olderThan', 'newerThan', 'empty', 'notempty'],
+    date: ['olderThan', 'newerThan', 'withinNext', 'empty', 'notempty'],
     number: ['gt', 'lt', 'eq', 'empty', 'notempty'],
     bytes: ['lt', 'gt', 'empty']
   };
@@ -256,6 +259,7 @@
       }
       case 'olderThan': { const ms = dateMs(raw); return !ms || ms < Date.now() - Number(v) * DAY; }
       case 'newerThan': { const ms = dateMs(raw); return !!ms && ms >= Date.now() - Number(v) * DAY; }
+      case 'withinNext': { const ms = dateMs(raw); return !!ms && ms <= Date.now() + Number(v) * DAY; }
       case 'gt':
       case 'lt': {
         if (empty) return false;
@@ -361,12 +365,14 @@
     const src = C.SOURCES[r.source];
     const iconName = r.mine ? 'report' : (src ? src.icon : 'report');
     const locked = src && !hasPermission(src.permission);
+    const lic = missingLicense(src);
     return `<a class="tile ${r.mine ? 'mine' : ''}" href="#/r/${encodeURIComponent(r.id)}">
       <span class="ic">${icon(iconName)}</span>
       <span class="body">
         <span class="t">${esc(r.name)}</span>
         <span class="d">${esc(r.description || (src ? src.name : r.source))}</span>
-        ${locked ? `<span class="tag" title="Needs ${esc(permName(src.permission))}">${icon('lock', 'sm')}Needs permission</span>` : ''}
+        ${lic ? `<span class="tag" title="Your tenant doesn't have ${esc(LICENSE_NAMES[lic])}">${icon('lock', 'sm')}Needs ${esc(LICENSE_NAMES[lic].replace('Microsoft ', ''))}</span>`
+          : locked ? `<span class="tag" title="Needs ${esc(permName(src.permission))}">${icon('lock', 'sm')}Needs permission</span>` : ''}
       </span>
       ${r.mine ? `<button class="btn sm icon subtle del" data-del="${esc(r.id)}" title="Delete this saved report" aria-label="Delete">${icon('trash', 'sm')}</button>` : ''}
     </a>`;
@@ -440,18 +446,38 @@
 
   // =================================================================== build your own
   function renderSourcePicker() {
-    const items = Object.entries(C.SOURCES).map(([id, s]) => {
-      const locked = !hasPermission(s.permission);
-      return `<a class="tile" href="#/new/${id}"><span class="ic">${icon(s.icon)}</span><span class="body">
-        <span class="t">${esc(s.name)}</span><span class="d">${esc(s.description)}</span>
-        ${locked ? `<span class="tag">${icon('lock', 'sm')}Needs permission</span>` : ''}</span></a>`;
-    }).join('');
+    const all = Object.entries(C.SOURCES);
     $app.innerHTML = `<div class="page">
       <a class="back" href="#/">${icon('left', 'sm')}All reports</a>
       <div class="page-head"><div class="titles"><h1>Build your own report</h1>
-        <p>Step 1 of 2: what do you want to report on? Next you'll choose columns and filters.</p></div></div>
-      <div class="source-list">${items}</div>
+        <p>Step 1 of 2: what do you want to report on? ${fmtNum(all.length)} data sources, from Intune, Entra ID, Windows 365 and Microsoft 365.
+          Next you'll choose columns and filters.</p></div>
+        <label class="search-box">${icon('search', 'sm')}<input id="srcSearch" type="search" placeholder="Search data sources…" aria-label="Search data sources"></label></div>
+      <div id="srcGroups"></div>
     </div>`;
+    const draw = q => {
+      q = (q || '').trim().toLowerCase();
+      const order = C.AREAS || [];
+      const groups = new Map();
+      all.filter(([, s]) => !q || (s.name + ' ' + (s.description || '') + ' ' + (s.area || '')).toLowerCase().includes(q))
+        .sort(([, a], [, b]) => (order.indexOf(a.area) - order.indexOf(b.area)) || ((b.curated ? 1 : 0) - (a.curated ? 1 : 0)) || a.name.localeCompare(b.name))
+        .forEach(([id, s]) => { if (!groups.has(s.area)) groups.set(s.area, []); groups.get(s.area).push([id, s]); });
+      document.getElementById('srcGroups').innerHTML = groups.size ? [...groups].map(([area, list]) => `
+        <section class="section"><div class="section-head">${icon(list[0][1].icon)}<h2>${esc(area)}</h2><span class="n">${list.length}</span></div>
+          <div class="source-list">${list.map(([id, s]) => {
+            const locked = !hasPermission(s.permission);
+            const lic = missingLicense(s);
+            return `<a class="tile" href="#/new/${encodeURIComponent(id)}"><span class="ic">${icon(s.icon)}</span><span class="body">
+              <span class="t">${esc(s.name)}</span><span class="d">${esc(s.description)}</span>
+              ${lic ? `<span class="tag">${icon('lock', 'sm')}Needs ${esc(LICENSE_NAMES[lic].replace('Microsoft ', ''))}</span>`
+                : locked ? `<span class="tag" title="Needs ${esc(permName(s.permission))}">${icon('lock', 'sm')}Needs permission</span>` : ''}</span></a>`;
+          }).join('')}</div></section>`).join('')
+        : `<div class="empty">${icon('search')}<b>No data source matches “${esc(q)}”</b></div>`;
+    };
+    draw('');
+    const box = document.getElementById('srcSearch');
+    box.oninput = debounce(() => draw(box.value), 150);
+    box.focus();
   }
 
   function renderQueryPage() {
@@ -503,22 +529,95 @@
     loadData(false);
   }
 
+  function shapeResult(res) {
+    const shaped = analyse(res.rows || []);
+    shaped.fetchedAt = Date.now();
+    shaped.truncated = res.truncated;
+    shaped.dropped = res.droppedFields || [];
+    shaped.notes = res.notes || [];
+    return shaped;
+  }
+
+  // Reports Intune prepares on request run as background jobs: the user can wait here,
+  // cancel, or leave and get a notification (bell, top right) when it's ready.
+  async function loadJob(v, path, force) {
+    v.loading = true; v.error = null; v.job = null;
+    renderReport();
+    try {
+      v.job = await API.jobs.start(path.slice(5), force);
+      JOBS.track(v.job, v.def.name, '/' + location.hash);
+    } catch (e) {
+      if (state.view !== v) return;
+      v.error = e; v.loading = false; renderReport(); return;
+    }
+    JOBS.setViewing(v.job.id);
+    renderReport();
+    while (state.view === v && v.job) {
+      const st = v.job.status;
+      if (st === 'done') {
+        try {
+          const shaped = shapeResult(await API.jobs.result(v.job.id));
+          state.cache.set(path, shaped);
+          JOBS.update(v.job.id, { status: 'done', seen: true, rows: shaped.rows.length, finishedAt: Date.now() });
+          if (state.view !== v) return;
+          v.data = shaped; v.job = null; finishLoad();
+        } catch (e) { if (state.view === v) { v.error = e; v.loading = false; v.job = null; renderReport(); } }
+        return;
+      }
+      if (st === 'failed' || st === 'cancelled') {
+        const err = new Error(st === 'cancelled' ? 'This report was cancelled.' : ((v.job.error && v.job.error.message) || "Intune couldn't prepare this report."));
+        err.kind = (v.job.error && v.job.error.kind) || 'graph';
+        JOBS.update(v.job.id, { status: st, seen: true, finishedAt: Date.now(), error: err.message });
+        v.error = err; v.loading = false; v.job = null; renderReport();
+        return;
+      }
+      await new Promise(r => setTimeout(r, 3000));
+      if (state.view !== v || !v.job) return;
+      try { v.job = await API.jobs.get(v.job.id); } catch (e) {
+        if (state.view === v) { v.error = e; v.loading = false; v.job = null; renderReport(); }
+        return;
+      }
+      const el = document.getElementById('jobElapsed');
+      if (el) el.textContent = elapsedText(v.job.started);
+    }
+  }
+
+  function elapsedText(startedSec) {
+    const s = Math.max(0, Math.round(Date.now() / 1000 - startedSec));
+    return s < 60 ? `${s} seconds` : `${Math.floor(s / 60)} min ${s % 60} s`;
+  }
+
+  // Licences a data source needs (from the catalog) vs. what the tenant has (from /api/status).
+  const LICENSE_NAMES = { entraP1: 'Microsoft Entra ID P1', entraP2: 'Microsoft Entra ID P2', intune: 'Microsoft Intune', windows365: 'Windows 365' };
+  function missingLicense(src) {
+    const lic = state.status && state.status.licenses;
+    if (!lic || !src || !src.requires) return null;
+    return lic[src.requires] ? null : src.requires;
+  }
+
   async function loadData(force) {
     const v = state.view;
     const path = resolvePath(v.path);
-    const cached = state.cache.get(path);
+    let cached = state.cache.get(path);
+    if (cached && path.startsWith('view:export:')) {
+      const done = JOBS.latestDone(path.slice(5));
+      if (done && done.finishedAt > cached.fetchedAt) cached = null; // a newer copy was prepared in the background
+    }
     if (cached && !force) { v.data = cached; finishLoad(); return; }
+    const need = !v.tryAnyway && missingLicense(sourceOf(v.def));
+    if (need) {
+      const err = new Error(`This report needs ${LICENSE_NAMES[need]}, which your tenant doesn't have.`);
+      err.kind = 'notlicensed'; err.license = need;
+      v.error = err; v.loading = false; renderReport(); return;
+    }
+    if (path.startsWith('view:export:')) return loadJob(v, path, force);
     v.loading = true; v.error = null;
     v.abort = new AbortController();
     renderReport();
     try {
       // "view:<name>" sources are combined reports built on the server from several Graph calls.
       const res = path.startsWith('view:') ? await API.view(path.slice(5), v.abort.signal) : await API.query(path, v.abort.signal);
-      const shaped = analyse(res.rows || []);
-      shaped.fetchedAt = Date.now();
-      shaped.truncated = res.truncated;
-      shaped.dropped = res.droppedFields || [];
-      shaped.notes = res.notes || [];
+      const shaped = shapeResult(res);
       state.cache.set(path, shaped);
       if (state.view !== v) return;
       v.data = shaped;
@@ -635,6 +734,9 @@
       case 'throttled':
         return 'Microsoft limits how often data can be read. Wait a minute, then try again.';
       case 'notlicensed':
+        if (e.license === 'entraP1' || e.license === 'entraP2' || /Entra ID P[12]/.test(e.message))
+          return 'Entra ID P1 comes with Microsoft 365 E3/E5, Business Premium and EMS; P2 with Microsoft 365 E5 and EMS E5. The licences your tenant has are listed in <a href="/settings#/admin">Settings</a>.';
+        if (e.license === 'windows365') return 'This needs Windows 365 Cloud PCs in your tenant.';
         return 'Intune needs a licence such as Microsoft Intune Plan 1, Microsoft 365 Business Premium or Microsoft 365 E3/E5 (free trials are available in the Microsoft 365 admin center).';
       case 'badquery':
       case 'notfound':
@@ -661,6 +763,27 @@
         </div>
       </div>`;
 
+    if (v.loading && v.job) {
+      $app.innerHTML = `<div class="page wide">${head}<div class="card"><div class="loading">
+        <div class="spinner"></div><b>We're preparing this report…</b>
+        <p class="muted">Intune builds this report on request. It usually takes one to five minutes (<span id="jobElapsed">${esc(elapsedText(v.job.started))}</span> so far).
+          You don't have to wait here: we'll show it as soon as it's ready, or tell you with the bell at the top right.</p>
+        <div class="form-actions" style="justify-content:center">
+          <button class="btn primary" id="notifyBtn">${icon('bell', 'sm')}Notify me when it's ready</button>
+          <button class="btn" id="cancelJobBtn">Cancel</button></div></div></div></div>`;
+      document.getElementById('notifyBtn').onclick = () => {
+        JOBS.setViewing(null);
+        toast("We'll let you know when it's ready. Look for the bell at the top right.");
+        location.hash = '#/';
+      };
+      document.getElementById('cancelJobBtn').onclick = async () => {
+        const id = v.job && v.job.id;
+        v.job = null;
+        if (id) { try { await API.jobs.cancel(id); } catch (e) { /* already done */ } JOBS.forget(id); }
+        location.hash = '#/';
+      };
+      return;
+    }
     if (v.loading) {
       $app.innerHTML = `<div class="page wide">${head}<div class="card"><div class="loading">
         <div class="spinner"></div><b>Getting data from Microsoft…</b>
@@ -673,8 +796,8 @@
       const e = v.error;
       $app.innerHTML = `<div class="page wide">${head}
         <div class="banner bad">${icon('alert')}<div class="grow"><b>${esc(e.message)}</b>${errorHint(e)}</div>
-        <button class="btn sm" id="retryBtn">Try again</button></div></div>`;
-      document.getElementById('retryBtn').onclick = () => loadData(true);
+        <button class="btn sm" id="retryBtn">${e.license ? 'Try anyway' : 'Try again'}</button></div></div>`;
+      document.getElementById('retryBtn').onclick = () => { if (e.license) v.tryAnyway = true; loadData(true); };
       document.getElementById('refreshBtn').onclick = () => loadData(true);
       return;
     }
@@ -1009,6 +1132,7 @@
   // =================================================================== routing
   async function route() {
     closeOverlays();
+    JOBS.setViewing(null); // leaving a report: a finished background report now shows a notification
     const hash = location.hash || '#/';
     const [, kind, arg] = hash.match(/^#\/([^/]*)\/?(.*)$/) || [];
     window.scrollTo(0, 0);
@@ -1025,8 +1149,9 @@
 
     let def = null;
     if (kind === 'new') {
-      const src = C.SOURCES[arg];
-      if (src) def = { id: null, name: 'New report: ' + src.name, description: src.description, source: arg, isNew: true, summaryBy: null };
+      const sid = decodeURIComponent(arg);
+      const src = C.SOURCES[sid];
+      if (src) def = { id: null, name: 'New report: ' + src.name, description: src.description, source: sid, isNew: true, summaryBy: null };
     } else if (kind === 'q') {
       const path = decodeURIComponent(arg);
       def = { id: null, name: 'Custom Graph query', description: path, source: path, isQuery: true, isNew: true };

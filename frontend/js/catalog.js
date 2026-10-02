@@ -1,10 +1,13 @@
-/* Copyright 2026 Orynr LLC. Developed by Sai Kamal Doss (SKDOSS).
+/* Copyright 2026 Orynr LLC. Developed by SKDOSS.
    Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
    SPDX-License-Identifier: Apache-2.0 */
 /* Report catalog: data sources, ready-made reports, friendly column names and
    value translations. Edit this file to add or tweak built-in reports. */
 (function () {
-  const DEVICE_FIELDS = [
+  // Generated from Microsoft Graph's schema by tools/gen_catalog.py (catalog-all.js).
+  const EXTRA = window.CATALOG_EXTRA || { sources: [], fields: {} };
+  const F = EXTRA.fields || {};
+  const DEVICE_FIELDS_MIN = [
     'id', 'deviceName', 'userDisplayName', 'userPrincipalName', 'emailAddress', 'operatingSystem', 'osVersion',
     'complianceState', 'lastSyncDateTime', 'enrolledDateTime', 'manufacturer', 'model', 'serialNumber',
     'managedDeviceOwnerType', 'isEncrypted', 'deviceEnrollmentType', 'managementAgent', 'azureADDeviceId',
@@ -12,6 +15,8 @@
     'ethernetMacAddress', 'imei', 'phoneNumber', 'jailBroken', 'isSupervised', 'autopilotEnrolled', 'joinType',
     'skuFamily', 'enrollmentProfileName', 'physicalMemoryInBytes'
   ];
+  const DEVICE_FIELDS = F.managedDevice && F.managedDevice.length ? F.managedDevice : DEVICE_FIELDS_MIN;
+  const sel = (list, fallback) => (list && list.length ? list : fallback).join(',');
 
   const P = {
     devices: 'DeviceManagementManagedDevices.Read.All',
@@ -23,7 +28,21 @@
     entraDevices: 'Device.Read.All',
     org: 'Organization.Read.All',
     bitlocker: 'BitLockerKey.ReadBasic.All',
-    laps: 'DeviceLocalCredential.ReadBasic.All'
+    laps: 'DeviceLocalCredential.ReadBasic.All',
+    rbac: 'DeviceManagementRBAC.Read.All',
+    cloudpc: 'CloudPC.Read.All',
+    apps365: 'Application.Read.All',
+    policy: 'Policy.Read.All',
+    audit: 'AuditLog.Read.All',
+    roles: 'RoleManagement.Read.Directory',
+    health: 'ServiceHealth.Read.All',
+    messages: 'ServiceMessage.Read.All',
+    secscore: 'SecurityEvents.Read.All',
+    alerts: 'SecurityAlert.Read.All',
+    incidents: 'SecurityIncident.Read.All',
+    risky: 'IdentityRiskyUser.Read.All',
+    riskEvents: 'IdentityRiskEvent.Read.All',
+    directory: 'Directory.Read.All'
   };
 
   // What each permission unlocks (shown on the Settings page).
@@ -36,8 +55,22 @@
     { name: P.groups, unlocks: 'Groups, plus group names and member counts in assignment reports' },
     { name: P.entraDevices, unlocks: 'Entra ID devices' },
     { name: P.org, unlocks: 'Licenses' },
-    { name: P.bitlocker, unlocks: 'Which devices have a BitLocker recovery key saved (never the key itself)' },
-    { name: P.laps, unlocks: 'Which devices have a LAPS password backed up (never the password itself)' }
+    { name: P.bitlocker, unlocks: 'Which devices have a BitLocker recovery key saved (never the key itself)', optional: true },
+    { name: P.laps, unlocks: 'Which devices have a LAPS password backed up (never the password itself)', optional: true },
+    { name: P.rbac, unlocks: 'Intune roles, role assignments and scope tags', optional: true },
+    { name: P.cloudpc, unlocks: 'Windows 365 Cloud PCs, provisioning and connections', optional: true },
+    { name: P.apps365, unlocks: 'App registrations and enterprise apps, including secret and certificate expiry', optional: true },
+    { name: P.policy, unlocks: 'Conditional Access, named locations, authentication methods and tenant policies', optional: true },
+    { name: P.audit, unlocks: 'Sign-in activity, MFA registration, sign-in and Entra audit logs (some need Entra ID P1)', optional: true },
+    { name: P.roles, unlocks: 'Entra ID admin roles, who holds them, and eligible (PIM) roles', optional: true },
+    { name: P.health, unlocks: 'Microsoft 365 service health and incidents', optional: true },
+    { name: P.messages, unlocks: 'Microsoft 365 message center', optional: true },
+    { name: P.secscore, unlocks: 'Microsoft Secure Score and improvement actions', optional: true },
+    { name: P.alerts, unlocks: 'Microsoft Defender XDR alerts', optional: true },
+    { name: P.incidents, unlocks: 'Microsoft Defender XDR incidents', optional: true },
+    { name: P.risky, unlocks: 'Risky users (Entra ID P2)', optional: true },
+    { name: P.riskEvents, unlocks: 'Risk detections (Entra ID P2)', optional: true },
+    { name: P.directory, unlocks: 'Domains, administrative units, consents, deleted items (covers User/Group/Device read too)', optional: true }
   ];
 
   // Where data comes from. `permission` may be a list: any one of them is enough.
@@ -88,7 +121,7 @@
     entraDevices: {
       name: 'Entra ID devices', icon: 'device', permission: P.entraDevices,
       description: 'All devices registered or joined in Entra ID (Azure AD).',
-      path: '/devices?$select=id,displayName,operatingSystem,operatingSystemVersion,trustType,accountEnabled,isCompliant,isManaged,approximateLastSignInDateTime,registrationDateTime,manufacturer,model,deviceId',
+      path: '/devices?$select=' + sel(F.device, ['id', 'displayName', 'operatingSystem', 'operatingSystemVersion', 'trustType', 'accountEnabled', 'isCompliant', 'isManaged', 'approximateLastSignInDateTime', 'registrationDateTime', 'manufacturer', 'model', 'deviceId']),
       columns: ['displayName', 'operatingSystem', 'operatingSystemVersion', 'trustType', 'isManaged', 'isCompliant', 'approximateLastSignInDateTime']
     },
     detectedApps: {
@@ -100,7 +133,7 @@
     mobileApps: {
       name: 'Intune apps', icon: 'apps', permission: P.apps,
       description: 'Apps added to Intune for deployment.',
-      path: '/deviceAppManagement/mobileApps?$select=id,displayName,publisher,isAssigned,createdDateTime,lastModifiedDateTime',
+      path: '/deviceAppManagement/mobileApps',
       columns: ['displayName', '@odata.type', 'publisher', 'isAssigned', 'lastModifiedDateTime']
     },
     appProtection: {
@@ -142,7 +175,7 @@
     settingsCatalog: {
       name: 'Settings catalog policies', icon: 'sliders', permission: P.config,
       description: 'Policies built with the settings catalog.',
-      path: '/deviceManagement/configurationPolicies?$select=id,name,description,platforms,technologies,settingCount,isAssigned,createdDateTime,lastModifiedDateTime',
+      path: '/deviceManagement/configurationPolicies',
       columns: ['name', 'platforms', 'technologies', 'settingCount', 'isAssigned', 'lastModifiedDateTime']
     },
     adminTemplates: {
@@ -184,13 +217,13 @@
     users: {
       name: 'Users', icon: 'users', permission: [P.users, 'Directory.Read.All'],
       description: 'All user accounts in Entra ID.',
-      path: '/users?$select=id,displayName,userPrincipalName,mail,jobTitle,department,officeLocation,accountEnabled,userType,createdDateTime,usageLocation',
+      path: '/users?$select=' + sel(F.user, ['id', 'displayName', 'userPrincipalName', 'mail', 'jobTitle', 'department', 'officeLocation', 'accountEnabled', 'userType', 'createdDateTime', 'usageLocation']),
       columns: ['displayName', 'userPrincipalName', 'jobTitle', 'department', 'accountEnabled', 'userType']
     },
     groups: {
       name: 'Groups', icon: 'users', permission: [P.groups, 'Directory.Read.All'],
       description: 'All Entra ID groups.',
-      path: '/groups?$select=id,displayName,description,mail,groupTypes,securityEnabled,mailEnabled,membershipRule,createdDateTime',
+      path: '/groups?$select=' + sel(F.group, ['id', 'displayName', 'description', 'mail', 'groupTypes', 'securityEnabled', 'mailEnabled', 'membershipRule', 'createdDateTime']),
       columns: ['displayName', 'description', 'groupTypes', 'securityEnabled', 'membershipRule']
     },
     licenses: {
@@ -198,6 +231,18 @@
       description: 'Microsoft licenses the organization owns and how many are used.',
       path: '/subscribedSkus',
       columns: ['skuPartNumber', 'prepaidUnits.enabled', 'consumedUnits', 'capabilityStatus', 'appliesTo']
+    },
+    appCredentials: {
+      name: 'App secrets & certificates', icon: 'key', permission: P.apps365, area: 'Apps & consents',
+      description: 'Every client secret and certificate on app registrations and enterprise apps, with expiry. Secret values are never read.',
+      path: 'view:appCredentials',
+      columns: ['appName', 'objectType', 'credentialType', 'credentialName', 'health', 'expires', 'daysLeft']
+    },
+    userLicenses: {
+      name: 'Licenses per user', icon: 'key', permission: [P.users, P.directory], area: 'Users & groups',
+      description: 'Every user and each license they hold: assigned directly or by a group, and any assignment errors.',
+      path: 'view:userLicenses',
+      columns: ['displayName', 'userPrincipalName', 'license', 'assignedBy', 'assignmentState', 'assignmentError', 'accountEnabled', 'department']
     },
     auditLog: {
       name: 'Intune audit log (30 days)', icon: 'clock',
@@ -208,14 +253,61 @@
     }
   };
 
+  // Areas for the "Build your own" picker. Hand-made sources first, then everything generated from the schema.
+  const CURATED_AREA = {
+    assignments: 'Assignments', appDetails: 'Apps & app protection', appRelationships: 'Apps & app protection',
+    connectors: 'Connectors & tenant settings', windowsRecovery: 'Devices', autopilotEntra: 'Enrollment & Autopilot',
+    devices: 'Devices', entraDevices: 'Devices', detectedApps: 'Apps & app protection', mobileApps: 'Apps & app protection',
+    appProtection: 'Apps & app protection', compliancePolicies: 'Configuration & compliance', complianceSettings: 'Configuration & compliance',
+    encryption: 'Devices', malware: 'Devices', configProfiles: 'Configuration & compliance', settingsCatalog: 'Configuration & compliance',
+    adminTemplates: 'Configuration & compliance', scripts: 'Configuration & compliance', remediations: 'Configuration & compliance',
+    autopilot: 'Enrollment & Autopilot', autopilotProfiles: 'Enrollment & Autopilot', enrollmentConfigs: 'Enrollment & Autopilot',
+    users: 'Users & groups', groups: 'Users & groups', licenses: 'Tenant', auditLog: 'Audit logs'
+  };
+  Object.entries(SOURCES).forEach(([id, s]) => { s.area = s.area || CURATED_AREA[id] || 'Other'; s.curated = true; });
+  const basePath = p => String(p || '').split('?')[0].replace(/\/+$/, '').toLowerCase();
+  const taken = new Set(Object.values(SOURCES).map(s => basePath(s.path)));
+  (EXTRA.sources || []).forEach(x => {
+    if (SOURCES[x.id] || (!x.path.startsWith('view:') && taken.has(basePath(x.path)) && !x.path.includes('?'))) return;
+    SOURCES[x.id] = {
+      name: x.name, icon: x.icon || 'report', permission: x.permission, area: x.area, path: x.path, columns: x.columns || [],
+      description: x.description || (x.single ? 'A single record from Intune.' : 'All records from Microsoft Graph: ' + x.path)
+    };
+  });
+  // Which Microsoft licence a source needs, so reports can say so before asking Microsoft.
+  const NEEDS_P1 = ['entraUsersSignIns', 'entraConditionalAccess', 'entraNamedLocations', 'entraMfaRegistration', 'entraSignIns', 'entraProvisioning'];
+  const NEEDS_P2 = ['entraRoleEligible', 'entraRiskyUsers', 'entraRiskDetections'];
+  const INTUNE_VIEWS = ['assignments', 'appDetails', 'appRelationships', 'connectors', 'windowsRecovery', 'autopilotEntra'];
+  Object.entries(SOURCES).forEach(([id, s]) => {
+    const p = String(s.path || '');
+    if (NEEDS_P1.includes(id)) s.requires = 'entraP1';
+    else if (NEEDS_P2.includes(id)) s.requires = 'entraP2';
+    else if (p.startsWith('/deviceManagement/virtualEndpoint')) s.requires = 'windows365';
+    else if (p.startsWith('/deviceManagement') || p.startsWith('/deviceAppManagement') || p.startsWith('view:export:') ||
+      INTUNE_VIEWS.includes(p.replace('view:', ''))) s.requires = 'intune';
+  });
+
+  const AREAS = ['Assignments', 'Devices', 'Configuration & compliance', 'Apps & app protection', 'Enrollment & Autopilot',
+    'Endpoint analytics', 'Connectors & tenant settings', 'Intune roles & scope tags', 'Windows 365', 'Monitoring & alerts',
+    'Users & groups', 'Identity & access', 'Apps & consents', 'Audit logs', 'Security', 'Microsoft 365 service', 'Tenant',
+    'Intune reports: Devices', 'Intune reports: Apps', 'Intune reports: Compliance', 'Intune reports: Device configuration',
+    'Intune reports: Endpoint security', 'Intune reports: Endpoint analytics', 'Intune reports: Windows updates',
+    'Intune reports: Enrollment', 'Intune reports: Co-management', 'Intune reports: Scripts and remediations',
+    'Intune reports: Users', 'Reference data (Microsoft catalogs)', 'Other'];
+
   const CATEGORIES = [
     { id: 'devices', name: 'Devices', icon: 'device' },
     { id: 'security', name: 'Compliance & security', icon: 'shield' },
     { id: 'config', name: 'Configuration', icon: 'sliders' },
     { id: 'assignments', name: 'Assignments', icon: 'target' },
     { id: 'apps', name: 'Apps', icon: 'apps' },
+    { id: 'updates', name: 'Updates', icon: 'refresh' },
+    { id: 'analytics', name: 'Endpoint analytics', icon: 'chart' },
     { id: 'enrollment', name: 'Enrollment & Autopilot', icon: 'rocket' },
     { id: 'directory', name: 'Users, groups & licenses', icon: 'users' },
+    { id: 'identity', name: 'Identity & access', icon: 'key' },
+    { id: 'm365', name: 'Microsoft 365 & security', icon: 'alert' },
+    { id: 'w365', name: 'Windows 365', icon: 'device' },
     { id: 'activity', name: 'Activity', icon: 'clock' }
   ];
 
@@ -413,7 +505,244 @@
 
     // ---- Activity
     R({ id: 'audit-log', category: 'activity', source: 'auditLog', name: 'Intune changes (last 30 days)',
-      description: 'Who changed what in Intune and when.', sort: { col: 'activityDateTime', dir: 'desc' }, summaryBy: 'category' })
+      description: 'Who changed what in Intune and when.', sort: { col: 'activityDateTime', dir: 'desc' }, summaryBy: 'category' }),
+    R({ id: 'remote-actions', category: 'activity', source: 'g.deviceManagement.remoteActionAudits', name: 'Remote actions (wipe, retire, sync...)',
+      description: 'Every remote action an admin ran on a device, who ran it and whether it worked.', sort: { col: 'requestDateTime', dir: 'desc' }, summaryBy: 'action' }),
+    R({ id: 'entra-audit', category: 'activity', source: 'entraDirectoryAudits', name: 'Entra ID changes (last 7 days)',
+      description: 'Changes to users, groups, apps and roles.', sort: { col: 'activityDateTime', dir: 'desc' }, summaryBy: 'category' }),
+    R({ id: 'sign-ins', category: 'activity', source: 'entraSignIns', name: 'Sign-ins (last 24 hours)',
+      description: 'Every sign-in with app, location, device and result. Needs Entra ID P1.', sort: { col: 'createdDateTime', dir: 'desc' }, summaryBy: 'appDisplayName' }),
+
+    // ---- Devices (more)
+    R({ id: 'device-inventory', category: 'devices', source: 'x.DevicesWithInventory', name: 'Device hardware & inventory',
+      description: "Intune's full inventory export: serial, model, storage, TPM, BIOS, processor, Wi-Fi IP, carrier and more." }),
+    R({ id: 'devices-export', category: 'devices', source: 'x.Devices', name: 'All devices (Intune export)',
+      description: "Intune's own All devices export with every column, as the admin center exports it." }),
+    R({ id: 'cert-expiring', category: 'devices', source: 'devices', name: 'Device management certificates expiring soon',
+      description: 'Devices whose Intune management certificate expires in the next 30 days. They stop checking in if it lapses.',
+      columns: ['deviceName', 'userPrincipalName', 'operatingSystem', 'managementCertificateExpirationDate', 'lastSyncDateTime'],
+      filters: [{ col: 'managementCertificateExpirationDate', op: 'newerThan', value: -30 }], sort: { col: 'managementCertificateExpirationDate', dir: 'asc' } }),
+    R({ id: 'device-threat', category: 'devices', source: 'devices', name: 'Threat state reported by Defender / partners',
+      description: 'Mobile Threat Defense and Defender for Endpoint risk level per device.',
+      columns: ['deviceName', 'userPrincipalName', 'operatingSystem', 'partnerReportedThreatState', 'complianceState', 'lastSyncDateTime'],
+      filters: [{ col: 'partnerReportedThreatState', op: 'notin', value: ['unknown', 'activated', 'secured', 'lowSeverity'] }], summaryBy: 'partnerReportedThreatState' }),
+    R({ id: 'co-managed', category: 'devices', source: 'x.ComanagedDeviceWorkloads', name: 'Co-managed devices & workloads',
+      description: 'Devices managed by both Configuration Manager and Intune, and which workloads Intune owns.' }),
+    R({ id: 'device-categories', category: 'devices', source: 'devices', name: 'Devices by category',
+      description: 'How devices are spread across device categories.', summaryBy: 'deviceCategoryDisplayName' }),
+    R({ id: 'device-models', category: 'devices', source: 'devices', name: 'Devices by manufacturer & model',
+      description: 'Hardware mix across the fleet.', columns: ['deviceName', 'manufacturer', 'model', 'operatingSystem', 'osVersion', 'chassisType', 'enrolledDateTime'], summaryBy: 'model' }),
+    R({ id: 'cleanup-rules', category: 'devices', source: 'g.deviceManagement.managedDeviceCleanupRules', name: 'Device clean-up rules',
+      description: 'Rules that automatically remove devices that stopped checking in.' }),
+
+    // ---- Compliance & security (more)
+    R({ id: 'noncompliant-settings', category: 'security', source: 'x.NoncompliantDevicesAndSettings', name: 'Non-compliant devices and the failing settings',
+      description: 'For every non-compliant device: which policy and which setting fails.', summaryBy: 'SettingName' }),
+    R({ id: 'no-compliance-policy', category: 'security', source: 'x.DevicesWithoutCompliancePolicy', name: 'Devices without a compliance policy',
+      description: 'Devices no compliance policy applies to.', summaryBy: 'OS' }),
+    R({ id: 'device-compliance-export', category: 'security', source: 'x.DeviceCompliance', name: 'Device compliance (Intune export)',
+      description: "Intune's compliance report for every device, with grace period and threat level.", summaryBy: 'ComplianceState' }),
+    R({ id: 'defender-agents', category: 'security', source: 'x.DefenderAgents', name: 'Microsoft Defender antivirus status',
+      description: 'Real-time protection, tamper protection, signature age and agent state per device.', summaryBy: 'DeviceState' }),
+    R({ id: 'defender-unhealthy', category: 'security', source: 'x.UnhealthyDefenderAgents', name: 'Unhealthy Defender antivirus agents',
+      description: 'Devices where Defender protection is off, out of date or failing.', summaryBy: 'DeviceState' }),
+    R({ id: 'active-malware', category: 'security', source: 'x.ActiveMalware', name: 'Active malware (Intune export)',
+      description: 'Threats still active on devices, with severity and state.', summaryBy: 'Severity' }),
+    R({ id: 'firewall-off', category: 'security', source: 'x.FirewallUnhealthyStatus', name: 'Windows Firewall off or unhealthy',
+      description: 'Devices where Windows Firewall is not fully on.', summaryBy: 'FirewallStatus' }),
+    R({ id: 'tpm-attestation', category: 'security', source: 'x.TpmAttestationStatus', name: 'TPM attestation status',
+      description: 'Whether each Windows device passed TPM attestation, with TPM version and maker.', summaryBy: 'AttestationStatus' }),
+    R({ id: 'health-attestation', category: 'security', source: 'x.WindowsDeviceHealthAttestationReport', name: 'Windows device health attestation',
+      description: 'Secure Boot, BitLocker, code integrity, VBS and memory protection per device.', summaryBy: 'SecureBootStatus' }),
+    R({ id: 'device-certificates', category: 'security', source: 'x.AllDeviceCertificates', name: 'Certificates issued to devices',
+      description: 'SCEP / PKCS certificates on devices, with issuer, subject and validity.', sort: { col: 'ValidTo', dir: 'asc' }, summaryBy: 'CertificateStatus' }),
+    R({ id: 'encryption-states', category: 'security', source: 'encryption', name: 'Encryption state per device',
+      description: 'BitLocker / FileVault state and readiness for every device.', summaryBy: 'encryptionState' }),
+
+    // ---- Configuration (more)
+    R({ id: 'remediation-results', category: 'config', source: 'x.PolicyRunStatesByProactiveRemediation', name: 'Remediation results per device',
+      description: 'For every remediation and device: detection result, whether it fixed the issue, and script output.', summaryBy: 'PolicyName' }),
+    R({ id: 'script-results', category: 'config', source: 'x.DeviceRunStatesByScript', name: 'Platform script results per device',
+      description: 'Whether each PowerShell script succeeded or failed on each device.', summaryBy: 'RunState' }),
+    R({ id: 'config-conflicts', category: 'config', source: 'g.deviceManagement.deviceConfigurationConflictSummary', name: 'Configuration conflicts',
+      description: 'Settings that two or more profiles set differently.' }),
+    R({ id: 'assignment-filters', category: 'config', source: 'g.deviceManagement.assignmentFilters', name: 'Assignment filters',
+      description: 'Every assignment filter with its platform and rule.', summaryBy: 'platform' }),
+    R({ id: 'compliance-scripts', category: 'config', source: 'g.deviceManagement.deviceComplianceScripts', name: 'Custom compliance scripts',
+      description: 'Discovery scripts used by custom compliance policies.' }),
+    R({ id: 'macos-scripts', category: 'config', source: 'g.deviceManagement.deviceShellScripts', name: 'macOS shell scripts',
+      description: 'Shell scripts pushed to Macs.' }),
+    R({ id: 'gp-analytics', category: 'config', source: 'x.GPAnalyticsSettingMigrationReadiness', name: 'Group Policy analytics: migration readiness',
+      description: 'Which of your on-premises Group Policy settings can move to Intune.', summaryBy: 'MdmSupportedState' }),
+    R({ id: 'scope-tags', category: 'config', source: 'g.deviceManagement.roleScopeTags', name: 'Intune scope tags',
+      description: 'Scope tags used to split Intune administration.' }),
+    R({ id: 'intune-roles', category: 'config', source: 'g.deviceManagement.roleAssignments', name: 'Intune role assignments',
+      description: 'Who holds which Intune admin role and over which groups.' }),
+
+    // ---- Apps (more)
+    R({ id: 'app-install-status', category: 'apps', source: 'x.OrgDeviceInstallStatus', name: 'App install status per device',
+      description: 'Every app on every device: installed, failed, pending or not applicable, with error codes.', summaryBy: 'InstallState' }),
+    R({ id: 'app-install-failures', category: 'apps', source: 'x.OrgDeviceInstallStatus', name: 'Failed app installs',
+      description: 'Devices where an app failed to install, with the error code.',
+      filters: [{ col: 'InstallState', op: 'contains', value: 'fail' }], summaryBy: 'ApplicationName' }),
+    R({ id: 'app-install-summary', category: 'apps', source: 'x.AppInstallStatusAggregate', name: 'App install summary',
+      description: 'For each app: how many devices and users installed it, failed or are pending.', sort: { col: 'FailedDeviceCount', dir: 'desc' } }),
+    R({ id: 'discovered-per-device', category: 'apps', source: 'x.AppInvRawData', name: 'Discovered apps per device',
+      description: 'Every piece of software on every device (raw inventory).', summaryBy: 'ApplicationName' }),
+    R({ id: 'mam-status', category: 'apps', source: 'x.MAMAppProtectionStatus', name: 'App protection status per user',
+      description: 'Which users have protected apps, on which devices, and whether they checked in.', summaryBy: 'AppProtectionStatus' }),
+    R({ id: 'mam-registrations', category: 'apps', source: 'g.deviceAppManagement.managedAppRegistrations', name: 'Devices registered for app protection (MAM)',
+      description: 'Apps and devices registered with Intune app protection, including unenrolled devices.', summaryBy: 'platformVersion' }),
+    R({ id: 'app-config-policies', category: 'apps', source: 'g.deviceAppManagement.mobileAppConfigurations', name: 'App configuration policies (devices)',
+      description: 'App configuration policies for managed devices.', summaryBy: '@odata.type' }),
+    R({ id: 'vpp-tokens', category: 'apps', source: 'g.deviceAppManagement.vppTokens', name: 'Apple VPP tokens',
+      description: 'Apple apps & books tokens, their state and expiry.' }),
+    R({ id: 'policy-sets', category: 'apps', source: 'g.deviceAppManagement.policySets', name: 'Policy sets',
+      description: 'Bundles of apps and policies assigned together.' }),
+
+    // ---- Updates
+    R({ id: 'update-rings', category: 'updates', source: 'configProfiles', name: 'Windows Update rings',
+      description: 'Windows Update for Business rings and their deferral settings.',
+      filters: [{ col: '@odata.type', op: 'eq', value: '#microsoft.graph.windowsUpdateForBusinessConfiguration' }] }),
+    R({ id: 'feature-updates', category: 'updates', source: 'x.FeatureUpdatePolicyStatusSummary', name: 'Feature update status by policy',
+      description: 'For each Windows feature update policy: devices succeeded, in progress or in error.' }),
+    R({ id: 'quality-updates', category: 'updates', source: 'x.QualityUpdatePolicyStatusSummary', name: 'Expedited quality update status',
+      description: 'For each expedited quality update policy: devices succeeded, in progress or in error.' }),
+    R({ id: 'driver-updates', category: 'updates', source: 'x.DriverUpdatePolicyStatusSummary', name: 'Driver update status by policy',
+      description: 'Driver update policies: drivers needing review, paused, succeeded or failed.' }),
+    R({ id: 'feature-update-profiles', category: 'updates', source: 'g.deviceManagement.windowsFeatureUpdateProfiles', name: 'Feature update profiles',
+      description: 'Which Windows version each feature update profile targets.' }),
+    R({ id: 'ios-updates', category: 'updates', source: 'g.deviceManagement.iosUpdateStatuses', name: 'iOS/iPadOS update status',
+      description: 'Install status of iOS/iPadOS updates per device.', summaryBy: 'installStatus' }),
+    R({ id: 'macos-updates', category: 'updates', source: 'g.deviceManagement.macOSSoftwareUpdateAccountSummaries', name: 'macOS update status',
+      description: 'macOS software update results per device.' }),
+    R({ id: 'windows-versions', category: 'updates', source: 'devices', name: 'Windows versions in use',
+      description: 'Every Windows build in the fleet, so you can spot devices that are behind.',
+      columns: ['deviceName', 'userPrincipalName', 'osVersion', 'skuFamily', 'lastSyncDateTime'],
+      filters: [{ col: 'operatingSystem', op: 'eq', value: 'Windows' }], summaryBy: 'osVersion' }),
+
+    // ---- Endpoint analytics
+    R({ id: 'ea-startup', category: 'analytics', source: 'x.EAStartupPerfDevicePerformance', name: 'Startup performance per device',
+      description: 'Boot and sign-in times, blue screens and restarts per device.', sort: { col: 'StartupPerformanceScore', dir: 'asc' } }),
+    R({ id: 'ea-app-reliability', category: 'analytics', source: 'x.EAAppPerformance', name: 'App reliability',
+      description: 'Which apps crash or hang most across the fleet.', sort: { col: 'TotalAppCrashes', dir: 'desc' } }),
+    R({ id: 'ea-battery', category: 'analytics', source: 'x.BRDeviceBatteryAgg', name: 'Battery health per device',
+      description: 'Battery capacity, cycle count and runtime per laptop.', sort: { col: 'BatteryHealthScore', dir: 'asc' } }),
+    R({ id: 'ea-wfa', category: 'analytics', source: 'x.EAWFADeviceList', name: 'Work from anywhere / Windows 11 readiness',
+      description: 'Cloud management, Autopilot and Windows 11 hardware checks per device.', summaryBy: 'UpgradeEligibility' }),
+    R({ id: 'ea-scores', category: 'analytics', source: 'g.deviceManagement.userExperienceAnalyticsDeviceScores', name: 'Endpoint analytics scores per device',
+      description: 'Overall, startup, app reliability and battery scores for each device.' }),
+    R({ id: 'ea-not-autopilot-ready', category: 'analytics', source: 'g.deviceManagement.userExperienceAnalyticsNotAutopilotReadyDevice', name: 'Devices not ready for Autopilot',
+      description: 'Devices that are missing something Windows Autopilot needs.' }),
+    R({ id: 'ea-no-cloud-identity', category: 'analytics', source: 'g.deviceManagement.userExperienceAnalyticsDevicesWithoutCloudIdentity', name: 'Devices without a cloud identity',
+      description: 'Devices that are not Entra joined or hybrid joined.' }),
+    R({ id: 'ea-resource', category: 'analytics', source: 'g.deviceManagement.userExperienceAnalyticsResourcePerformance', name: 'CPU and memory pressure per device',
+      description: 'Devices that regularly run out of CPU or memory.' }),
+
+    // ---- Enrollment (more)
+    R({ id: 'enrollment-failures', category: 'enrollment', source: 'x.DeviceEnrollmentFailures', name: 'Enrollment failures',
+      description: 'Every failed enrollment with the reason.', sort: { col: 'EnrollmentFailureDateTime', dir: 'desc' }, summaryBy: 'FailureReason' }),
+    R({ id: 'enrollment-activity', category: 'enrollment', source: 'x.EnrollmentActivity', name: 'Enrollment activity',
+      description: 'Every enrollment attempt, successful or not.', sort: { col: 'EnrollmentDateTime', dir: 'desc' }, summaryBy: 'EnrollmentMethod' }),
+    R({ id: 'autopilot-deployments', category: 'enrollment', source: 'x.AutopilotV1DeploymentStatus', name: 'Autopilot deployments',
+      description: 'Each Autopilot deployment: profile, duration, ESP result and failure details.', summaryBy: 'DeploymentState' }),
+    R({ id: 'terms', category: 'enrollment', source: 'g.deviceManagement.termsAndConditions', name: 'Terms and conditions',
+      description: 'Terms users must accept to enroll.' }),
+    R({ id: 'imported-identities', category: 'enrollment', source: 'g.deviceManagement.importedDeviceIdentities', name: 'Corporate device identifiers',
+      description: 'IMEI and serial numbers pre-registered as corporate-owned.' }),
+
+    // ---- Users, groups & licenses (more)
+    R({ id: 'user-licenses', category: 'directory', source: 'userLicenses', name: 'Licenses per user',
+      description: 'Each user and every license they hold, direct or through a group.', summaryBy: 'license' }),
+    R({ id: 'disabled-licensed', category: 'directory', source: 'userLicenses', name: 'Disabled accounts still holding a license',
+      description: 'Money left on the table: blocked accounts that still use a paid license.',
+      filters: [{ col: 'accountEnabled', op: 'isfalse' }, { col: 'license', op: 'ne', value: '(no license)' }], summaryBy: 'license' }),
+    R({ id: 'license-errors', category: 'directory', source: 'userLicenses', name: 'License assignment errors',
+      description: 'Group-based license assignments that failed, and why.',
+      filters: [{ col: 'assignmentError', op: 'notempty' }], summaryBy: 'assignmentError' }),
+    R({ id: 'unlicensed-users', category: 'directory', source: 'userLicenses', name: 'Users without a license',
+      description: 'Accounts with no license at all.', filters: [{ col: 'license', op: 'eq', value: '(no license)' }], summaryBy: 'userType' }),
+    R({ id: 'inactive-users', category: 'directory', source: 'entraUsersSignIns', name: 'Users with no sign-in for 90+ days',
+      description: 'Accounts nobody has used for three months. Needs Entra ID P1.',
+      filters: [{ col: 'accountEnabled', op: 'istrue' }, { col: 'signInActivity.lastSuccessfulSignInDateTime', op: 'olderThan', value: 90 }],
+      sort: { col: 'signInActivity.lastSuccessfulSignInDateTime', dir: 'asc' }, summaryBy: 'userType' }),
+    R({ id: 'user-details', category: 'directory', source: 'users', name: 'User details (all fields)',
+      description: 'Every user with contact, organisation, on-premises sync and password fields.',
+      columns: ['displayName', 'userPrincipalName', 'employeeId', 'jobTitle', 'department', 'companyName', 'city', 'country', 'mobilePhone', 'onPremisesSyncEnabled', 'lastPasswordChangeDateTime'] }),
+    R({ id: 'synced-users', category: 'directory', source: 'users', name: 'Users synced from on-premises AD',
+      description: 'Accounts that come from Active Directory, with their last sync time.',
+      columns: ['displayName', 'userPrincipalName', 'onPremisesSamAccountName', 'onPremisesDomainName', 'onPremisesLastSyncDateTime', 'accountEnabled'],
+      filters: [{ col: 'onPremisesSyncEnabled', op: 'istrue' }], summaryBy: 'onPremisesDomainName' }),
+    R({ id: 'old-passwords', category: 'directory', source: 'users', name: 'Passwords not changed for a year',
+      description: 'Enabled accounts whose password is over a year old.',
+      columns: ['displayName', 'userPrincipalName', 'lastPasswordChangeDateTime', 'passwordPolicies', 'onPremisesSyncEnabled'],
+      filters: [{ col: 'accountEnabled', op: 'istrue' }, { col: 'lastPasswordChangeDateTime', op: 'olderThan', value: 365 }], sort: { col: 'lastPasswordChangeDateTime', dir: 'asc' } }),
+    R({ id: 'users-managers', category: 'directory', source: 'entraUsersManagers', name: 'Users and their managers',
+      description: 'Each user with their manager. Filter for missing managers.', columns: ['displayName', 'userPrincipalName', 'department', 'jobTitle', 'manager.displayName'] }),
+    R({ id: 'ownerless-groups', category: 'directory', source: 'entraGroupsOwners', name: 'Groups without an owner',
+      description: 'Groups nobody owns, so nobody reviews who is in them.', filters: [{ col: 'owners', op: 'empty' }] }),
+    R({ id: 'deleted-users', category: 'directory', source: 'entraDeletedUsers', name: 'Deleted users (can be restored)',
+      description: 'Users deleted in the last 30 days.', sort: { col: 'deletedDateTime', dir: 'desc' } }),
+    R({ id: 'role-groups', category: 'directory', source: 'groups', name: 'Groups that can hold admin roles',
+      description: 'Role-assignable groups: membership changes here change admin rights.', filters: [{ col: 'isAssignableToRole', op: 'istrue' }] }),
+
+    // ---- Identity & access
+    R({ id: 'admin-roles', category: 'identity', source: 'entraRoleAssignments', name: 'Who holds Entra ID admin roles',
+      description: 'Every active admin role assignment: users, groups and apps.', summaryBy: 'roleDefinition.displayName' }),
+    R({ id: 'pim-eligible', category: 'identity', source: 'entraRoleEligible', name: 'Eligible (PIM) admin roles',
+      description: 'Roles people can activate when needed. Needs Entra ID P2.', summaryBy: 'roleDefinition.displayName' }),
+    R({ id: 'ca-policies', category: 'identity', source: 'entraConditionalAccess', name: 'Conditional Access policies',
+      description: 'Every policy and whether it is on, off or report-only. Needs Entra ID P1.', summaryBy: 'state' }),
+    R({ id: 'named-locations', category: 'identity', source: 'entraNamedLocations', name: 'Named locations',
+      description: 'Trusted IP ranges and countries.' }),
+    R({ id: 'mfa-registration', category: 'identity', source: 'entraMfaRegistration', name: 'MFA registration per user',
+      description: 'Who is registered for MFA and passwordless, and their default method.', summaryBy: 'isMfaRegistered' }),
+    R({ id: 'no-mfa', category: 'identity', source: 'entraMfaRegistration', name: 'Users not registered for MFA',
+      description: 'Members who can sign in without a second factor.', filters: [{ col: 'isMfaRegistered', op: 'isfalse' }], summaryBy: 'userType' }),
+    R({ id: 'admins-no-mfa', category: 'identity', source: 'entraMfaRegistration', name: 'Admins not registered for MFA',
+      description: 'Accounts with admin roles that have no MFA method.', filters: [{ col: 'isAdmin', op: 'istrue' }, { col: 'isMfaRegistered', op: 'isfalse' }] }),
+    R({ id: 'auth-methods', category: 'identity', source: 'entraAuthMethodsPolicy', name: 'Authentication methods switched on',
+      description: 'Which sign-in methods the tenant allows.', summaryBy: 'state' }),
+    R({ id: 'app-credentials', category: 'identity', source: 'appCredentials', name: 'App secrets & certificates expiring',
+      description: 'Client secrets and certificates on apps, soonest expiry first. Expired ones break integrations.', sort: { col: 'daysLeft', dir: 'asc' }, summaryBy: 'health' }),
+    R({ id: 'enterprise-apps', category: 'identity', source: 'entraServicePrincipals', name: 'Enterprise applications',
+      description: 'Every enterprise app / service principal in the tenant.', summaryBy: 'servicePrincipalType' }),
+    R({ id: 'app-registrations', category: 'identity', source: 'entraApps', name: 'App registrations',
+      description: 'Every app registration and who it is for.', summaryBy: 'signInAudience' }),
+    R({ id: 'consents', category: 'identity', source: 'entraConsents', name: 'App consents (delegated permissions)',
+      description: 'Which apps users or admins consented to, and the scopes granted.', summaryBy: 'consentType' }),
+    R({ id: 'risky-users', category: 'identity', source: 'entraRiskyUsers', name: 'Risky users',
+      description: 'Users flagged by Entra ID Protection. Needs Entra ID P2.', summaryBy: 'riskLevel' }),
+    R({ id: 'tenant-policy', category: 'identity', source: 'entraAuthorizationPolicy', name: 'Tenant guest & consent settings',
+      description: 'Guest access, app registration and user consent settings.' }),
+
+    // ---- Microsoft 365 & security
+    R({ id: 'service-health', category: 'm365', source: 'serviceHealth', name: 'Microsoft 365 service health',
+      description: 'Current health of every service, including Intune and Entra ID.', summaryBy: 'status' }),
+    R({ id: 'service-issues', category: 'm365', source: 'serviceIssues', name: 'Service incidents & advisories',
+      description: 'Open and recent Microsoft incidents.', sort: { col: 'startDateTime', dir: 'desc' }, summaryBy: 'service' }),
+    R({ id: 'message-center', category: 'm365', source: 'messageCenter', name: 'Message center (upcoming changes)',
+      description: 'Announcements and upcoming changes from Microsoft.', sort: { col: 'lastModifiedDateTime', dir: 'desc' }, summaryBy: 'category' }),
+    R({ id: 'secure-score', category: 'm365', source: 'secureScoreControls', name: 'Secure Score improvement actions',
+      description: 'Every Secure Score recommendation with its maximum points and status.', sort: { col: 'maxScore', dir: 'desc' }, summaryBy: 'controlCategory' }),
+    R({ id: 'security-alerts', category: 'm365', source: 'securityAlerts', name: 'Security alerts (Defender XDR)',
+      description: 'Alerts from Microsoft Defender products.', sort: { col: 'createdDateTime', dir: 'desc' }, summaryBy: 'severity' }),
+    R({ id: 'security-incidents', category: 'm365', source: 'securityIncidents', name: 'Security incidents (Defender XDR)',
+      description: 'Incidents grouping related alerts.', sort: { col: 'createdDateTime', dir: 'desc' }, summaryBy: 'status' }),
+    R({ id: 'domains', category: 'm365', source: 'entraDomains', name: 'Domains',
+      description: 'Every domain on the tenant and whether it is verified.', summaryBy: 'isVerified' }),
+    R({ id: 'intune-alerts', category: 'm365', source: 'g.monitoring.alertRecords', name: 'Intune alerts',
+      description: 'Alerts raised by Intune monitoring rules.', sort: { col: 'detectedDateTime', dir: 'desc' } }),
+
+    // ---- Windows 365
+    R({ id: 'cloud-pcs', category: 'w365', source: 'g.virtualEndpoint.cloudPCs', name: 'Cloud PCs',
+      description: 'Every Windows 365 Cloud PC, its user, plan and status.', summaryBy: 'status' }),
+    R({ id: 'cloud-pc-connections', category: 'w365', source: 'g.virtualEndpoint.onPremisesConnections', name: 'Azure network connections',
+      description: 'Network connections used by Cloud PCs and their health checks.', summaryBy: 'healthCheckStatus' }),
+    R({ id: 'cloud-pc-policies', category: 'w365', source: 'g.virtualEndpoint.provisioningPolicies', name: 'Cloud PC provisioning policies',
+      description: 'How Cloud PCs are created: image, join type and region.' }),
+    R({ id: 'cloud-pc-images', category: 'w365', source: 'g.virtualEndpoint.deviceImages', name: 'Cloud PC custom images',
+      description: 'Uploaded images and their status.' })
   ];
 
   // Friendly column names. Anything not listed is generated from the field name.
@@ -470,7 +799,21 @@
     lapsPassword: 'LAPS password', lapsLastBackup: 'LAPS last backup',
     // Autopilot vs Entra
     entraStatus: 'Entra ID device', entraDeviceName: 'Entra device name', entraLastSignIn: 'Entra last sign-in',
-    intuneEnrolled: 'Enrolled in Intune', azureActiveDirectoryDeviceId: 'Entra device ID'
+    intuneEnrolled: 'Enrolled in Intune', azureActiveDirectoryDeviceId: 'Entra device ID',
+    // App secrets & licenses per user
+    objectType: 'Kind', appName: 'App', appId: 'Application (client) ID', credentialType: 'Credential', credentialName: 'Credential name',
+    usage: 'Used for', startDateTime: 'Valid from', license: 'License', assignedBy: 'Assigned by', assignmentState: 'Assignment state',
+    assignmentError: 'Assignment error', disabledPlans: 'Disabled service plans', lastUpdated: 'Last updated',
+    // More device / user fields
+    managementCertificateExpirationDate: 'Management certificate expires', partnerReportedThreatState: 'Threat state',
+    chassisType: 'Chassis', processorArchitecture: 'Processor', employeeId: 'Employee ID', companyName: 'Company',
+    mobilePhone: 'Mobile phone', onPremisesSyncEnabled: 'Synced from AD', lastPasswordChangeDateTime: 'Password last changed',
+    onPremisesSamAccountName: 'AD account name', onPremisesDomainName: 'AD domain', onPremisesLastSyncDateTime: 'Last AD sync',
+    passwordPolicies: 'Password policies', 'manager.displayName': 'Manager', isAssignableToRole: 'Can hold admin roles',
+    'signInActivity.lastSuccessfulSignInDateTime': 'Last successful sign-in', 'signInActivity.lastSignInDateTime': 'Last interactive sign-in',
+    'signInActivity.lastNonInteractiveSignInDateTime': 'Last non-interactive sign-in', 'roleDefinition.displayName': 'Role',
+    'principal.displayName': 'Assigned to', 'principal.userPrincipalName': 'Assigned to (UPN)', isMfaRegistered: 'MFA registered',
+    isAdmin: 'Admin', defaultMfaMethod: 'Default MFA method', methodsRegistered: 'Methods registered'
   };
 
   // Value translations for fields that hold codes.
@@ -526,7 +869,7 @@
     'complianceState', 'runAsAccount', 'state', 'status'];
 
   // Dates where "how long ago" matters.
-  const RELATIVE_DATES = ['lastSyncDateTime', 'approximateLastSignInDateTime', 'lastContactedDateTime', 'lastDetectionDateTime', 'enrolledDateTime',
+  const RELATIVE_DATES = ['managementCertificateExpirationDate', 'lastPasswordChangeDateTime', 'lastSuccessfulSignInDateTime', 'lastSignInDateTime', 'lastNonInteractiveSignInDateTime', 'LastContact', 'LastCheckin', 'LastReportedDateTime', 'ValidTo', 'lastSyncDateTime', 'approximateLastSignInDateTime', 'lastContactedDateTime', 'lastDetectionDateTime', 'enrolledDateTime',
     'lastSync', 'lastKeyBackup', 'lapsLastBackup', 'entraLastSignIn', 'expires'];
 
   const ODATA_TYPES = {
@@ -553,5 +896,5 @@
     windowsRestoreDeviceEnrollmentConfiguration: 'Windows restore'
   };
 
-  window.CATALOG = { PERMISSIONS, SOURCES, CATEGORIES, REPORTS, LABELS, VALUES, TONES, ENUM_FIELDS, RELATIVE_DATES, ODATA_TYPES };
+  window.CATALOG = { PERMISSIONS, SOURCES, AREAS, CATEGORIES, REPORTS, LABELS, VALUES, TONES, ENUM_FIELDS, RELATIVE_DATES, ODATA_TYPES };
 })();

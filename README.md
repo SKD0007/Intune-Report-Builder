@@ -6,11 +6,11 @@
 
 <p align="center">
   <b>Ready-made Microsoft Intune reports anyone can read: in your browser, on your own server.</b><br>
-  Free to use for Intune reporting · by <b>Orynr</b> · developed by Sai Kamal Doss (SKDOSS)
+  Free to use for Intune reporting · by <b>Orynr</b> · developed by SKDOSS
 </p>
 
 <h3 align="center">
-  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.7/Orynr-IntuneReportBuilder-Setup-2.0.7.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.7.exe, 15 MB)</a>
+  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.10/Orynr-IntuneReportBuilder-Setup-2.0.10.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.10.exe, 15 MB)</a>
 </h3>
 <p align="center">
   Or see <a href="https://github.com/SKD0007/Intune-Report-Builder/releases">all releases</a> · Install steps <a href="#install">below</a>
@@ -33,9 +33,10 @@
 
 ## What it does
 
-Intune Report Builder connects to your Microsoft tenant **read-only** and turns Intune and Entra ID data into clear, ready-made reports:
+Intune Report Builder connects to your Microsoft tenant **read-only** and turns Intune, Entra ID, Windows 365 and Microsoft 365 data into clear, ready-made reports:
 
-- **60 reports out of the box:** non-compliant devices, devices that haven't checked in for 30+ days, unencrypted devices, Windows / iPhone / Android / Mac inventories, Autopilot devices without a profile, unassigned apps and policies, discovered software, licenses, guest and disabled users, and the Intune change log.
+- **159 reports out of the box:** non-compliant devices and the exact failing settings, devices that haven't checked in, hardware inventory (TPM, BIOS, storage), app install status and failures per device, Defender and firewall health, Windows / iOS / macOS update status, Endpoint analytics (startup, app reliability, battery, Windows 11 readiness), enrollment and Autopilot failures, licenses per user, inactive users, MFA registration, admin roles, Conditional Access, app secrets about to expire, Microsoft 365 service health and the message center.
+- **Every data set there is:** over 400 data sources to build your own reports from, covering every Intune area (generated from Microsoft Graph's own schema, so nothing is left out), Intune's built-in exportable reports, Windows 365, Entra ID and Microsoft 365. Devices, users and groups come with every available field.
 - **Who gets what:** one list of everything assigned in Intune (apps, compliance, configuration, settings catalog, endpoint security, baselines, scripts, remediations, Windows updates, Autopilot, enrollment, app protection, policy sets and more) with the group, include/exclude, assignment filter and how many devices and users each group holds. Spot assignments to All users / All devices, exclusions, filters in use, and assignments to empty or deleted groups.
 - **App deep-dive:** versions, install commands, run-as context and detection rules for every app, plus supersedence and dependencies, with supersedence flagged when both apps are detected the same way.
 - **Health checks:** Apple push certificate, Apple enrollment and VPP token expiry, Managed Google Play and connector sync, Windows devices without a BitLocker recovery key or LAPS password in Entra ID, and Autopilot devices whose Entra ID device is missing.
@@ -43,6 +44,8 @@ Intune Report Builder connects to your Microsoft tenant **read-only** and turns 
 - **Filter, summarize, drill in:** add filters from drop-downs of real values, click a summary bar to narrow down, and click any row to see every detail of that device, user or app.
 - **Export to Excel** with readable headers and values, exactly as you see it.
 - **Update notifier:** an *Update available* button appears when a new version is published, with a direct download link.
+- **No waiting around:** reports Intune has to prepare first show *We're preparing this report*. Wait, cancel, or choose **Notify me** and carry on; the bell at the top right tells you when it's ready, and one click opens it.
+- **Knows your licences:** the app detects whether your tenant has Microsoft Intune, Entra ID P1/P2, Windows 365 and Defender for Endpoint, tags the reports that need something you don't have, and lists what you have in Settings.
 - **Save your own reports:** columns, filters and sort order are saved for the whole team, and the data is always fetched fresh.
 - **Build your own:** pick any data source, choose columns and filters, and save it. Experts can run any read-only Microsoft Graph query.
 
@@ -125,6 +128,16 @@ On the server, open **Settings → Administrative tasks**:
 | DeviceManagementServiceConfig.Read.All | Autopilot, enrollment settings, connectors & Apple tokens |
 | User.Read.All · Group.Read.All · Device.Read.All | Users, groups (and group names and member counts in assignment reports), Entra ID devices |
 | Organization.Read.All | Licenses |
+| DeviceManagementRBAC.Read.All | Intune roles, role assignments and scope tags |
+| CloudPC.Read.All | Windows 365 Cloud PCs, provisioning and connections |
+| Application.Read.All | App registrations and enterprise apps, including when their secrets and certificates expire |
+| Policy.Read.All | Conditional Access, named locations, authentication methods, tenant policies |
+| AuditLog.Read.All | Last sign-in per user, MFA registration, sign-in and Entra audit logs (some need Entra ID P1) |
+| RoleManagement.Read.Directory | Entra ID admin roles and eligible (PIM) roles |
+| ServiceHealth.Read.All · ServiceMessage.Read.All | Microsoft 365 service health and message center |
+| SecurityEvents.Read.All · SecurityAlert.Read.All · SecurityIncident.Read.All | Secure Score, Defender XDR alerts and incidents |
+| IdentityRiskyUser.Read.All · IdentityRiskEvent.Read.All | Risky users and risk detections (Entra ID P2) |
+| Directory.Read.All | Domains, administrative units, app consents, deleted users and groups |
 | BitLockerKey.ReadBasic.All | Which Windows devices have a BitLocker recovery key in Entra ID. *Basic* means the keys themselves can't be read. |
 | DeviceLocalCredential.ReadBasic.All | Which Windows devices have a LAPS password backed up. *Basic* means the passwords themselves can't be read. |
 
@@ -132,7 +145,7 @@ On the server, open **Settings → Administrative tasks**:
 
 ## Security and privacy
 
-- **Read-only:** every request to Microsoft is a read (GET), and only to `graph.microsoft.com`.
+- **Read-only:** the app only ever reads; nothing in your tenant is changed. Requests go only to `graph.microsoft.com`, and all of them are reads (GET) except one kind: for Intune's own built-in reports, it asks Intune to prepare the report (`POST /deviceManagement/reports/exportJobs`) and then downloads it from the temporary Azure Storage link Intune hands back (`*.blob.core.windows.net`). No Microsoft token is ever sent to that link.
 - **Least privilege:** the service runs as the built-in low-privilege *Local Service* account.
 - **Secrets stay on the server:** the client secret is encrypted at rest and never returned to a browser. The admin password is stored only as a salted hash.
 - **Locked-down settings page:** first-time admin setup only works on the server itself, sign-in locks out after repeated wrong passwords, and the web pages are served with strict security headers.
@@ -162,4 +175,4 @@ Microsoft, Intune, Entra and Excel are trademarks of the Microsoft group of comp
 ## Contact
 
 **Orynr LLC** · [orynr.com](https://orynr.com) · [info@orynr.com](mailto:info@orynr.com)
-Developed by **Sai Kamal Doss (SKDOSS)**
+Developed by **SKDOSS**

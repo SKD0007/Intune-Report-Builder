@@ -1,4 +1,4 @@
-/* Copyright 2026 Orynr LLC. Developed by Sai Kamal Doss (SKDOSS).
+/* Copyright 2026 Orynr LLC. Developed by SKDOSS.
    Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
    SPDX-License-Identifier: Apache-2.0 */
 /* Applies the chosen colour theme before the page paints (loaded in <head>).

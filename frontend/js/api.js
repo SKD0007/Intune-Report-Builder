@@ -1,4 +1,4 @@
-/* Copyright 2026 Orynr LLC. Developed by Sai Kamal Doss (SKDOSS).
+/* Copyright 2026 Orynr LLC. Developed by SKDOSS.
    Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
    SPDX-License-Identifier: Apache-2.0 */
 /* Backend API client + small UI helpers shared by both pages.
@@ -43,6 +43,12 @@ const API = (function () {
     saveReport: (r) => request('/api/reports', 'POST', r),
     deleteReport: (id) => request('/api/reports/' + encodeURIComponent(id), 'DELETE'),
     update: () => request('/api/update', 'GET'),
+    jobs: {
+      start: (name, force) => request('/api/jobs', 'POST', { name, force: !!force }),
+      get: (id) => request('/api/jobs/' + encodeURIComponent(id), 'GET'),
+      result: (id) => request('/api/jobs/' + encodeURIComponent(id) + '/result', 'GET'),
+      cancel: (id) => request('/api/jobs/' + encodeURIComponent(id), 'DELETE')
+    },
     admin: {
       state: () => request('/api/admin/state', 'GET'),
       setup: (username, password) => request('/api/admin/setup', 'POST', { username, password }),
@@ -86,6 +92,7 @@ const UI = (function () {
     down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>',
+    bell: '<path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 004 0"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
     plug: '<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>',
     report: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 13h6M9 17h6M9 9h3"/>',
@@ -103,15 +110,17 @@ const UI = (function () {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  function toast(text, tone) {
+  function toast(text, tone, action) {
     let host = document.querySelector('.toast-host');
     if (!host) { host = document.createElement('div'); host.className = 'toast-host'; document.body.appendChild(host); }
     const el = document.createElement('div');
     el.className = 'toast ' + (tone || '');
     el.setAttribute('role', 'status');
-    el.innerHTML = icon(tone === 'bad' ? 'alert' : 'check', 'sm') + `<span>${esc(text)}</span>`;
+    el.innerHTML = icon(tone === 'bad' ? 'alert' : 'check', 'sm') + `<span>${esc(text)}</span>` +
+      (action ? `<a class="toast-act" href="${esc(action.href)}">${esc(action.label)}</a>` : '');
+    if (action) el.querySelector('.toast-act').onclick = () => el.remove();
     host.appendChild(el);
-    setTimeout(() => el.remove(), tone === 'bad' ? 6000 : 3200);
+    setTimeout(() => el.remove(), action ? 12000 : tone === 'bad' ? 6000 : 3200);
   }
 
   function hydrateIcons(root) {
@@ -147,4 +156,100 @@ const UI = (function () {
   }
 
   return { icon, esc, toast, hydrateIcons, copy, updatePill };
+})();
+
+
+/* Report notifications: reports Intune prepares in the background (bell, top right).
+   The list lives in this browser only; the server keeps finished reports for 30 minutes. */
+const JOBS = (function () {
+  const KEY = 'irb.jobs.v1';
+  const KEEP = 24 * 3600 * 1000;
+  let list = [];
+  let timer = null;
+  let viewing = null;            // job id of the report open on screen (no pop-up for that one)
+  try { list = JSON.parse(localStorage.getItem(KEY) || '[]').filter(j => Date.now() - j.startedAt < KEEP); } catch (e) { list = []; }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(list.slice(0, 20))); } catch (e) { /* private window */ } };
+  const find = id => list.find(j => j.id === id);
+  const { icon, esc, toast } = UI;
+
+  function track(job, title, href) {
+    list = list.filter(j => j.id !== job.id && !(j.name === job.name && j.status !== 'running'));
+    list.unshift({ id: job.id, name: job.name, title, href, status: job.status, startedAt: Date.now(),
+      finishedAt: job.status === 'running' ? null : Date.now(), error: null, seen: job.status !== 'running' });
+    save(); draw(); poll();
+  }
+  function update(id, fields) { const j = find(id); if (j) { Object.assign(j, fields); save(); draw(); } }
+  function forget(id) { list = list.filter(j => j.id !== id); save(); draw(); }
+  function setViewing(id) { viewing = id; const j = id && find(id); if (j && j.status !== 'running' && !j.seen) update(id, { seen: true }); }
+
+  async function poll() {
+    clearTimeout(timer);
+    const running = list.filter(j => j.status === 'running');
+    if (!running.length) return;
+    for (const j of running) {
+      let s;
+      try { s = await API.jobs.get(j.id); } catch (e) {
+        if (e.status === 404) { j.status = 'expired'; j.finishedAt = Date.now(); }
+        continue;
+      }
+      if (s.status === 'running') continue;
+      j.status = s.status; j.finishedAt = Date.now(); j.error = s.error ? s.error.message : null; j.rows = s.rows;
+      j.seen = j.id === viewing;
+      if (!j.seen && s.status === 'done') toast(`Your report is ready: ${j.title}`, '', { label: 'Open', href: j.href });
+      if (!j.seen && s.status === 'failed') toast(`Couldn't prepare: ${j.title}`, 'bad');
+    }
+    save(); draw();
+    timer = setTimeout(poll, 4000);
+  }
+
+  function ago(ms) { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; }
+  function line(j) {
+    if (j.status === 'running') return `Preparing… started ${ago(j.startedAt)}`;
+    if (j.status === 'done') return `Ready${j.rows != null ? ` · ${Number(j.rows).toLocaleString()} records` : ''} · ${ago(j.finishedAt)}`;
+    if (j.status === 'failed') return `Couldn't prepare: ${j.error || 'error'}`;
+    if (j.status === 'cancelled') return 'Cancelled';
+    return 'No longer available: open it to run it again';
+  }
+
+  function draw() {
+    const bar = document.querySelector('.topbar');
+    if (!bar) return;
+    let wrap = bar.querySelector('.bell-wrap');
+    if (!list.length) { if (wrap) wrap.remove(); return; }
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'bell-wrap';
+      const anchor = bar.querySelector('.conn') || bar.lastElementChild;
+      bar.insertBefore(wrap, anchor);
+      document.addEventListener('click', e => { if (!wrap.contains(e.target)) wrap.classList.remove('open'); });
+    }
+    const unread = list.filter(j => j.status !== 'running' && !j.seen).length;
+    const busy = list.some(j => j.status === 'running');
+    const open = wrap.classList.contains('open');
+    wrap.innerHTML = `<button class="btn subtle sm icon bell ${busy ? 'busy' : ''}" aria-label="Report notifications" title="Reports being prepared">${icon('bell')}${unread ? `<span class="bell-count">${unread}</span>` : ''}</button>
+      <div class="bell-panel" role="dialog" aria-label="Report notifications">
+        <div class="bell-head"><b>Reports</b><button class="btn subtle sm" data-clear>Clear finished</button></div>
+        ${list.map(j => `<div class="bell-item ${j.status}">
+          <div class="grow"><div class="t">${esc(j.title)}</div><div class="s">${esc(line(j))}</div></div>
+          ${j.status === 'running' ? `<span class="spinner sm" aria-hidden="true"></span><button class="btn subtle sm" data-cancel="${esc(j.id)}">Cancel</button>`
+            : `<a class="btn sm ${j.status === 'done' ? 'primary' : ''}" href="${esc(j.href)}" data-open="${esc(j.id)}">${j.status === 'done' ? 'Open' : 'Run again'}</a>
+               <button class="btn subtle sm icon" data-forget="${esc(j.id)}" aria-label="Remove">${icon('x', 'sm')}</button>`}
+        </div>`).join('')}
+      </div>`;
+    if (open) wrap.classList.add('open');
+    wrap.querySelector('.bell').onclick = () => wrap.classList.toggle('open');
+    wrap.querySelector('[data-clear]').onclick = () => { list = list.filter(j => j.status === 'running'); save(); draw(); };
+    wrap.querySelectorAll('[data-forget]').forEach(b => b.onclick = () => forget(b.dataset.forget));
+    wrap.querySelectorAll('[data-open]').forEach(a => a.onclick = () => { update(a.dataset.open, { seen: true }); wrap.classList.remove('open'); });
+    wrap.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
+      try { await API.jobs.cancel(b.dataset.cancel); } catch (e) { /* already finished */ }
+      update(b.dataset.cancel, { status: 'cancelled', finishedAt: Date.now(), seen: true });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => { draw(); poll(); });
+  if (document.readyState !== 'loading') setTimeout(() => { draw(); poll(); });
+  // The newest finished copy of a report, so an old copy in the page cache isn't shown instead.
+  const latestDone = name => list.find(j => j.name === name && j.status === 'done');
+  return { track, update, forget, find, setViewing, poll, latestDone };
 })();

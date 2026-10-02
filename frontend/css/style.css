@@ -1,4 +1,4 @@
-/* Copyright 2026 Orynr LLC. Developed by Sai Kamal Doss (SKDOSS).
+/* Copyright 2026 Orynr LLC. Developed by SKDOSS.
    Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
    SPDX-License-Identifier: Apache-2.0 */
 /* Intune Report Builder — UI styles. Light by default, follows the OS dark mode. */
@@ -488,6 +488,8 @@ table.data td.empty-cell { color: var(--muted); }
 
 /* ------------------------------------------------------------- source picker / advanced */
 .source-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.source-list > * { min-width: 0; }
+.source-list .d { overflow-wrap: anywhere; }
 .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .examples button { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 
@@ -595,3 +597,31 @@ details.help li { margin: 5px 0; }
   .facts { grid-template-columns: 1fr; }
   .facts .k { border-bottom: 0; padding-bottom: 0; }
 }
+
+/* ------------------------------------------------------------- report notifications (bell) */
+.bell-wrap { position: relative; }
+.bell-wrap .bell { position: relative; }
+.bell-wrap .bell.busy svg.i { animation: bell-pulse 1.6s ease-in-out infinite; }
+@keyframes bell-pulse { 50% { opacity: .45; } }
+.bell-count {
+  position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
+  background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center;
+}
+.bell-panel {
+  display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: min(380px, calc(100vw - 32px));
+  max-height: 70vh; overflow: auto; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .18); padding: 6px;
+}
+.bell-wrap.open .bell-panel { display: block; }
+.bell-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 8px; }
+.bell-item { display: flex; align-items: center; gap: 8px; padding: 9px 8px; border-top: 1px solid var(--border); }
+.bell-item .t { font-weight: 600; font-size: 13.5px; }
+.bell-item .s { font-size: 12.5px; color: var(--text-2); }
+.bell-item.failed .s { color: var(--bad); }
+.bell-item .grow { flex: 1; min-width: 0; }
+.spinner.sm { width: 16px; height: 16px; border-width: 2px; flex: none; margin: 0; }
+.toast .toast-act { margin-left: 10px; font-weight: 700; color: inherit; text-decoration: underline; }
+h3.perm-group { font-size: 14px; margin: 18px 0 8px; }
+h3.perm-group:first-of-type { margin-top: 4px; }
+.perm .nm.lic { font-family: inherit; font-weight: 600; }
+.perm .nm.lic .muted { font-weight: 400; }

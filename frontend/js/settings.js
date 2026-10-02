@@ -1,4 +1,4 @@
-/* Copyright 2026 Orynr LLC. Developed by Sai Kamal Doss (SKDOSS).
+/* Copyright 2026 Orynr LLC. Developed by SKDOSS.
    Licensed under the Apache License, Version 2.0 (see LICENSE and NOTICE).
    SPDX-License-Identifier: Apache-2.0 */
 /* Settings page. Sections (hash routes):
@@ -10,9 +10,10 @@
   const { icon, esc, toast } = UI;
   const $root = document.getElementById('settings');
   const logoutBtn = document.getElementById('logoutBtn');
-  const VERSION = '2.0.7';
+  const VERSION = '2.0.10';
   let st = null;     // admin state from the server
   let roles = null;  // granted application permissions (null = unknown)
+  let licenses = null; // Microsoft licences the tenant has (null = unknown)
 
   // Previews use fixed colours so every card shows its own theme.
   const THEMES = [
@@ -103,11 +104,11 @@
       <p class="about-text">It is read-only by design: it can never change anything in your tenant. Your data goes straight from
         Microsoft to this server and your browser, and nothing is sent to Orynr.</p>
       <div class="facts">
-        <div class="k">Developed by</div><div><b>Sai Kamal Doss</b> (SKDOSS)</div>
+        <div class="k">Developed by</div><div><b>SKDOSS</b></div>
         <div class="k">Contact</div><div><a href="mailto:info@orynr.com">info@orynr.com</a></div>
         <div class="k">Brand</div><div>Orynr</div>
         <div class="k">Version</div><div>${VERSION}</div>
-        <div class="k">License</div><div>Apache License 2.0. You may use, change and share it, as long as you keep the credit to Orynr and Sai Kamal Doss (SKDOSS).</div>
+        <div class="k">License</div><div>Apache License 2.0. You may use, change and share it, as long as you keep the credit to Orynr and SKDOSS.</div>
         <div class="k">Open source</div><div>Runs on Python and open-source libraries such as FastAPI, Uvicorn, HTTPX and cryptography. Their licences are in the THIRD_PARTY_LICENSES folder where the app is installed. Thank you to their authors.</div>
       </div>
     </section>
@@ -191,7 +192,7 @@
     if (!st.loggedIn) return renderLogin();
     renderAdminMain();
     if (st.connected && roles === null) {
-      API.status().then(s => { if (s.connected) { roles = s.roles; drawPermissions(); } }).catch(() => {});
+      API.status().then(s => { if (s.connected) { roles = s.roles; licenses = s.licenses; drawPermissions(); } }).catch(() => {});
     }
   }
 
@@ -323,22 +324,46 @@
     loadUpdate(true);
   }
 
+  // What the tenant is licensed for (read from its subscriptions), and what each licence unlocks here.
+  const LICENSES = [
+    ['intune', 'Microsoft Intune', 'All Intune reports: devices, apps, policies, assignments, Endpoint analytics'],
+    ['entraP1', 'Microsoft Entra ID P1', 'Last sign-in, inactive users, MFA registration, Conditional Access, sign-in log'],
+    ['entraP2', 'Microsoft Entra ID P2', 'Risky users, risk detections, eligible (PIM) admin roles'],
+    ['windows365', 'Windows 365', 'Cloud PCs, provisioning policies, network connections'],
+    ['defenderEndpoint', 'Microsoft Defender for Endpoint', 'Richer device threat levels in the security reports']
+  ];
+  function licenseHtml() {
+    if (!licenses) {
+      return `<h3 class="perm-group">Your Microsoft licences</h3><p class="small muted">${roles ? 'Couldn\'t read the tenant\'s subscriptions (needs Organization.Read.All).' : 'Shown once connected.'}</p>`;
+    }
+    return `<h3 class="perm-group">Your Microsoft licences</h3>
+      <p class="small muted" style="margin:0 0 10px">Detected from your tenant's subscriptions. Reports that need a licence you don't have are tagged and explain why.</p>
+      <div class="perm-list">${LICENSES.map(([k, name, what]) => `<div class="perm"><span class="st ${licenses[k] ? 'ok' : 'no'}" title="${licenses[k] ? 'Licensed' : 'Not licensed'}">${icon(licenses[k] ? 'check' : 'x')}</span>
+        <div><div class="nm lic">${esc(name)} <span class="muted small">${licenses[k] ? 'licensed' : 'not in this tenant'}</span></div><div class="un">${esc(what)}</div></div></div>`).join('')}</div>`;
+  }
+
   function drawPermissions() {
     const box = document.getElementById('perms');
     if (!box) return;
     const granted = p => roles && (roles.includes(p) || roles.includes(p.replace('.Read.', '.ReadWrite.')) || roles.includes(p.replace('.ReadBasic.', '.Read.')) ||
       (/^(User|Group|Device|Organization)\./.test(p) && (roles.includes('Directory.Read.All') || roles.includes('Directory.ReadWrite.All'))));
     const known = Array.isArray(roles);
-    const okCount = known ? C.PERMISSIONS.filter(p => granted(p.name)).length : 0;
-    box.innerHTML = (known ? `<p class="small" style="margin-bottom:10px"><b>${okCount} of ${C.PERMISSIONS.length}</b> permissions granted${okCount === C.PERMISSIONS.length ? '. Everything is ready.' : '.'}</p>` :
-      `<p class="small muted" style="margin-bottom:10px">${st.connected ? 'Checking…' : 'Connect first to see which permissions are granted.'}</p>`) +
-      `<div class="perm-list">${C.PERMISSIONS.map(p => {
-        const ok = known && granted(p.name);
-        return `<div class="perm"><span class="st ${ok ? 'ok' : 'no'}" title="${ok ? 'Granted' : known ? 'Not granted' : 'Unknown'}">${icon(ok ? 'check' : 'x')}</span>
+    const core = C.PERMISSIONS.filter(p => !p.optional), extra = C.PERMISSIONS.filter(p => p.optional);
+    const okCount = known ? core.filter(p => granted(p.name)).length : 0;
+    const okExtra = known ? extra.filter(p => granted(p.name)).length : 0;
+    const row = p => {
+      const ok = known && granted(p.name);
+      return `<div class="perm"><span class="st ${ok ? 'ok' : 'no'}" title="${ok ? 'Granted' : known ? 'Not granted' : 'Unknown'}">${icon(ok ? 'check' : 'x')}</span>
           <div><div class="nm">${esc(p.name)}</div><div class="un">${esc(p.unlocks)}</div></div></div>`;
-      }).join('')}</div>`;
+    };
+    box.innerHTML = (known ? `<p class="small" style="margin-bottom:10px"><b>${okCount} of ${core.length}</b> core permissions granted${okCount === core.length ? '. Everything is ready.' : '.'}</p>` :
+      `<p class="small muted" style="margin-bottom:10px">${st.connected ? 'Checking…' : 'Connect first to see which permissions are granted.'}</p>`) +
+      `<h3 class="perm-group">Core: the Intune, user and group reports</h3><div class="perm-list">${core.map(row).join('')}</div>` +
+      (extra.length ? `<h3 class="perm-group">Optional: Entra ID, Windows 365, Microsoft 365 and security reports${known ? ` <span class="muted small">(${okExtra} of ${extra.length} granted)</span>` : ''}</h3>
+        <p class="small muted" style="margin:0 0 10px">Add the ones you want. Reports that need a missing one show a “Needs permission” tag; everything else works without them.</p>
+        <div class="perm-list">${extra.map(row).join('')}</div>` : '') + licenseHtml();
     const num = document.getElementById('permNum');
-    if (num && known && okCount === C.PERMISSIONS.length) { num.className = 'step-num done'; num.innerHTML = icon('check', 'sm'); }
+    if (num && known && okCount === core.length) { num.className = 'step-num done'; num.innerHTML = icon('check', 'sm'); }
   }
 
   function wireAdmin() {
@@ -368,13 +393,13 @@
 
     document.getElementById('recheck').onclick = async (e) => {
       const btn = e.currentTarget; btn.disabled = true;
-      try { roles = (await API.admin.test()).roles || []; drawPermissions(); toast('Permissions re-checked'); }
+      try { roles = (await API.admin.test()).roles || []; const s = await API.status().catch(() => null); if (s) licenses = s.licenses; drawPermissions(); toast('Permissions re-checked'); }
       catch (err) { toast(err.message, 'bad'); }
       finally { btn.disabled = false; }
     };
 
     document.getElementById('copyPerms').onclick = async () => {
-      try { await UI.copy(C.PERMISSIONS.map(p => p.name).join('\n')); toast('Permission list copied'); }
+      try { await UI.copy(C.PERMISSIONS.filter(p => !p.optional).map(p => p.name).join('\n')); toast('Core permission list copied'); }
       catch (err) { toast('Copy failed: ' + err.message, 'bad'); }
     };
     document.getElementById('copyUrl').onclick = async () => {
