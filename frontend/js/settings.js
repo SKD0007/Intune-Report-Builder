@@ -10,7 +10,7 @@
   const { icon, esc, toast } = UI;
   const $root = document.getElementById('settings');
   const logoutBtn = document.getElementById('logoutBtn');
-  const VERSION = '2.0.10';
+  const VERSION = '2.0.11';
   let st = null;     // admin state from the server
   let roles = null;  // granted application permissions (null = unknown)
   let licenses = null; // Microsoft licences the tenant has (null = unknown)

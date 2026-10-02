@@ -10,7 +10,7 @@
 </p>
 
 <h3 align="center">
-  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.10/Orynr-IntuneReportBuilder-Setup-2.0.10.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.10.exe, 15 MB)</a>
+  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.11/Orynr-IntuneReportBuilder-Setup-2.0.11.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.11.exe, 15 MB)</a>
 </h3>
 <p align="center">
   Or see <a href="https://github.com/SKD0007/Intune-Report-Builder/releases">all releases</a> · Install steps <a href="#install">below</a>
