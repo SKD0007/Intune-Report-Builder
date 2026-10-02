@@ -183,8 +183,8 @@ const UI = (function () {
     const s = brand.support;
     const bar = document.querySelector('.topbar');
     if (!bar || !s || !s.warn || document.querySelector('.support-bar')) return;
-    bar.insertAdjacentHTML('afterend', `<div class="support-bar" role="status">${icon('alert', 'sm')}<span>This version stops working on <b>${esc(s.untilText)}</b>
-      (${Number(s.daysLeft)} days left). Please obtain a new version by contacting <a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a>.</span></div>`);
+    bar.insertAdjacentHTML('afterend', `<div class="support-bar" role="status">${icon('alert', 'sm')}<span>This version of the software will expire on <b>${esc(s.untilText)}</b>
+      (${Number(s.daysLeft)} days left). To keep using it, please obtain a new copy from <a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a>.</span></div>`);
   }
 
   return { icon, esc, toast, hydrateIcons, copy, updatePill, applyBranding, showBranding, title, brandName, getBrand: () => brand };

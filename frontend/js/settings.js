@@ -106,7 +106,7 @@
       <div class="facts">
         <div class="k">Developed by</div><div><b id="aboutCredit">SKDOSS</b></div>
         <div class="k hidden" id="aboutOrgK">Customised for</div><div class="hidden" id="aboutOrg"></div>
-        <div class="k">Supported until</div><div id="aboutSupport">…</div>
+        <div class="k">Expires</div><div id="aboutSupport">…</div>
         <div class="k">Contact</div><div><a href="mailto:info@orynr.com">info@orynr.com</a></div>
         <div class="k">Brand</div><div>Orynr</div>
         <div class="k">Version</div><div>${VERSION}</div>
@@ -120,7 +120,7 @@
       const c = document.getElementById('aboutCredit');
       if (c) c.textContent = String(b.credit || '').replace(/^Created by\s+/i, '') || 'SKDOSS';
       const sup = document.getElementById('aboutSupport');
-      if (sup && b.support) sup.textContent = `${b.support.untilText}. This version works until then; after that date it stops and you'll need a new version (contact ${b.support.contact}). A reminder appears three months before.`;
+      if (sup && b.support) sup.textContent = `This version of the software will expire on ${b.support.untilText}. To keep using it, please obtain a new copy.`;
       if (b.orgName) {
         document.getElementById('aboutOrgK').classList.remove('hidden');
         const o = document.getElementById('aboutOrg'); o.classList.remove('hidden'); o.textContent = b.orgName;
