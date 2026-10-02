@@ -10,7 +10,7 @@
 </p>
 
 <h3 align="center">
-  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.11/Orynr-IntuneReportBuilder-Setup-2.0.11.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.11.exe, 15 MB)</a>
+  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.12/Orynr-IntuneReportBuilder-Setup-2.0.12.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.12.exe, 15 MB)</a>
 </h3>
 <p align="center">
   Or see <a href="https://github.com/SKD0007/Intune-Report-Builder/releases">all releases</a> · Install steps <a href="#install">below</a>
@@ -44,6 +44,7 @@ Intune Report Builder connects to your Microsoft tenant **read-only** and turns 
 - **Filter, summarize, drill in:** add filters from drop-downs of real values, click a summary bar to narrow down, and click any row to see every detail of that device, user or app.
 - **Export to Excel** with readable headers and values, exactly as you see it.
 - **Update notifier:** an *Update available* button appears when a new version is published, with a direct download link.
+- **Your branding:** show your organisation's name and logo in the top bar and page titles (Settings → Administrative tasks).
 - **No waiting around:** reports Intune has to prepare first show *We're preparing this report*. Wait, cancel, or choose **Notify me** and carry on; the bell at the top right tells you when it's ready, and one click opens it.
 - **Knows your licences:** the app detects whether your tenant has Microsoft Intune, Entra ID P1/P2, Windows 365 and Defender for Endpoint, tags the reports that need something you don't have, and lists what you have in Settings.
 - **Save your own reports:** columns, filters and sort order are saved for the whole team, and the data is always fetched fresh.

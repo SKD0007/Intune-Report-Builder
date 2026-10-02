@@ -625,3 +625,19 @@ h3.perm-group { font-size: 14px; margin: 18px 0 8px; }
 h3.perm-group:first-of-type { margin-top: 4px; }
 .perm .nm.lic { font-family: inherit; font-weight: 600; }
 .perm .nm.lic .muted { font-weight: 400; }
+
+/* ------------------------------------------------------------- credit & branding */
+.irb-credit {
+  position: fixed; right: 12px; bottom: 6px; z-index: 40; pointer-events: none;
+  font-size: 11px; letter-spacing: .02em; color: var(--muted); opacity: .9;
+}
+.brand-edit { display: flex; gap: 18px; align-items: flex-start; }
+.brand-preview { width: 72px; height: 72px; flex: none; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.brand-preview img { max-width: 56px; max-height: 56px; object-fit: contain; }
+.brand-edit .grow { flex: 1; min-width: 0; }
+.brand-logo img { object-fit: contain; }
+@media (max-width: 720px) { .brand-edit { flex-direction: column; } }
+.support-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px;
+  font-size: 13px; background: var(--warn-soft); color: var(--text); border-bottom: 1px solid var(--border); }
+.support-bar a { font-weight: 600; }

@@ -1139,13 +1139,13 @@
 
     if (!kind) {
       state.view = null;
-      document.title = 'Intune Report Builder · Orynr';
+      document.title = UI.title('Intune Report Builder');
       renderHome();
       if (!state.savedLoaded) { await loadSaved(); if (isHome()) renderHome(); }
       return;
     }
-    if (kind === 'new' && !arg) { document.title = 'Build your own report · Orynr'; return renderSourcePicker(); }
-    if (kind === 'query' && !arg) { document.title = 'Graph query · Orynr'; return renderQueryPage(); }
+    if (kind === 'new' && !arg) { document.title = UI.title('Build your own report'); return renderSourcePicker(); }
+    if (kind === 'query' && !arg) { document.title = UI.title('Graph query'); return renderQueryPage(); }
 
     let def = null;
     if (kind === 'new') {
@@ -1165,7 +1165,7 @@
       $app.innerHTML = `<div class="page"><div class="empty">${icon('report')}<b>Report not found</b>It may have been deleted. <a href="#/">Back to all reports</a></div></div>`;
       return;
     }
-    document.title = def.name + ' · Orynr';
+    document.title = UI.title(def.name);
     const pending = state.pendingView;
     state.pendingView = null;
     if (pending && kind === 'r' && def.mine) {
@@ -1200,6 +1200,7 @@
   window.addEventListener('hashchange', route);
   route();
   UI.updatePill();
+  UI.applyBranding();
   loadStatus().then(() => {
     if (isHome()) renderHome();
     else if (location.hash === '#/new') renderSourcePicker();

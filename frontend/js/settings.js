@@ -10,7 +10,7 @@
   const { icon, esc, toast } = UI;
   const $root = document.getElementById('settings');
   const logoutBtn = document.getElementById('logoutBtn');
-  const VERSION = '2.0.11';
+  const VERSION = '2.0.12';
   let st = null;     // admin state from the server
   let roles = null;  // granted application permissions (null = unknown)
   let licenses = null; // Microsoft licences the tenant has (null = unknown)
@@ -55,7 +55,7 @@
       </nav>
       <div class="settings-main" id="pane"></div>
     </div>`;
-    document.title = { appearance: 'Appearance', admin: 'Administrative tasks', about: 'About' }[r] + ' · Settings · Orynr';
+    document.title = UI.title({ appearance: 'Appearance', admin: 'Administrative tasks', about: 'About' }[r] + ' · Settings');
     if (r === 'appearance') renderAppearance();
     else if (r === 'about') renderAbout();
     else loadAdmin();
@@ -104,7 +104,9 @@
       <p class="about-text">It is read-only by design: it can never change anything in your tenant. Your data goes straight from
         Microsoft to this server and your browser, and nothing is sent to Orynr.</p>
       <div class="facts">
-        <div class="k">Developed by</div><div><b>SKDOSS</b></div>
+        <div class="k">Developed by</div><div><b id="aboutCredit">SKDOSS</b></div>
+        <div class="k hidden" id="aboutOrgK">Customised for</div><div class="hidden" id="aboutOrg"></div>
+        <div class="k">Supported until</div><div id="aboutSupport">…</div>
         <div class="k">Contact</div><div><a href="mailto:info@orynr.com">info@orynr.com</a></div>
         <div class="k">Brand</div><div>Orynr</div>
         <div class="k">Version</div><div>${VERSION}</div>
@@ -114,6 +116,63 @@
     </section>
     <section class="card card-pad" id="updCard"><div class="muted small">Checking for updates…</div></section>`;
     loadUpdate(false);
+    UI.applyBranding().then(b => {
+      const c = document.getElementById('aboutCredit');
+      if (c) c.textContent = String(b.credit || '').replace(/^Created by\s+/i, '') || 'SKDOSS';
+      const sup = document.getElementById('aboutSupport');
+      if (sup && b.support) sup.textContent = `${b.support.untilText}. This version works until then; after that date it stops and you'll need a new version (contact ${b.support.contact}). A reminder appears three months before.`;
+      if (b.orgName) {
+        document.getElementById('aboutOrgK').classList.remove('hidden');
+        const o = document.getElementById('aboutOrg'); o.classList.remove('hidden'); o.textContent = b.orgName;
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------ branding
+  async function drawBranding() {
+    const box = document.getElementById('brandCard');
+    if (!box) return;
+    const b = await UI.applyBranding();
+    box.innerHTML = `<div class="step-head"><span class="step-num">${icon('sliders', 'sm')}</span><div><h2>Your organisation's name and logo</h2>
+        <p>Show your own name and logo in the top bar and page titles instead of Orynr.</p></div></div>
+      <div class="brand-edit">
+        <div class="brand-preview"><img id="brandImg" src="${esc(b.logo || '/static/brand/logo.svg')}" alt="" width="56" height="56"></div>
+        <div class="grow">
+          <label class="field"><span>Organisation name</span><input type="text" id="brandName" maxlength="60" value="${esc(b.orgName || '')}" placeholder="Orynr"></label>
+          <div class="form-actions">
+            <button class="btn primary" id="brandSave">Save name</button>
+            <label class="btn" for="brandFile">${icon('download', 'sm')}Upload logo…</label>
+            <input type="file" id="brandFile" accept="image/png,image/jpeg,image/webp" class="hidden">
+            <button class="btn subtle" id="brandReset" ${b.logo || b.orgName ? '' : 'disabled'}>Use the Orynr name and logo</button>
+            <span class="inline-msg" id="brandMsg"></span>
+          </div>
+          <p class="muted small">PNG, JPEG or WebP, up to 512 KB. A square image works best.</p>
+        </div>
+      </div>`;
+    const msg = document.getElementById('brandMsg');
+    document.getElementById('brandSave').onclick = async () => {
+      try { UI.showBranding(await API.admin.saveBranding(document.getElementById('brandName').value.trim())); showMsg(msg, 'Saved.', true); drawBranding(); }
+      catch (err) { showMsg(msg, err.message); }
+    };
+    document.getElementById('brandFile').onchange = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (file.size > 512 * 1024) return showMsg(msg, 'The logo must be 512 KB or smaller.');
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try { UI.showBranding(await API.admin.uploadLogo(reader.result)); toast('Logo updated'); drawBranding(); }
+        catch (err) { showMsg(msg, err.message); }
+      };
+      reader.readAsDataURL(file);
+    };
+    document.getElementById('brandReset').onclick = async () => {
+      try {
+        await API.admin.removeLogo();
+        UI.showBranding(await API.admin.saveBranding(''));
+        UI.showBranding({ orgName: null, logo: null });
+        toast('Back to the Orynr name and logo'); drawBranding();
+      } catch (err) { showMsg(msg, err.message); }
+    };
   }
 
   // ------------------------------------------------------------------ updates
@@ -317,10 +376,13 @@
           <span class="muted small">Deletes the saved tenant, client ID and secret from this server.</span></div>
       </section>
 
+      <section class="card card-pad" id="brandCard"></section>
+
       <section class="card card-pad" id="updCard"><div class="muted small">Checking for updates…</div></section>`;
 
     drawPermissions();
     wireAdmin();
+    drawBranding();
     loadUpdate(true);
   }
 
@@ -430,4 +492,5 @@
   window.addEventListener('hashchange', render);
   render();
   UI.updatePill();
+  UI.applyBranding();
 })();

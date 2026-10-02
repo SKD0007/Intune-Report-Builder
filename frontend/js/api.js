@@ -43,6 +43,7 @@ const API = (function () {
     saveReport: (r) => request('/api/reports', 'POST', r),
     deleteReport: (id) => request('/api/reports/' + encodeURIComponent(id), 'DELETE'),
     update: () => request('/api/update', 'GET'),
+    branding: () => request('/api/branding', 'GET'),
     jobs: {
       start: (name, force) => request('/api/jobs', 'POST', { name, force: !!force }),
       get: (id) => request('/api/jobs/' + encodeURIComponent(id), 'GET'),
@@ -59,7 +60,10 @@ const API = (function () {
       test: () => request('/api/admin/test', 'POST'),
       disconnect: () => request('/api/admin/disconnect', 'POST'),
       checkUpdate: () => request('/api/admin/update/check', 'POST'),
-      updateSettings: (enabled) => request('/api/admin/update/settings', 'POST', { enabled })
+      updateSettings: (enabled) => request('/api/admin/update/settings', 'POST', { enabled }),
+      saveBranding: (orgName) => request('/api/admin/branding', 'POST', { orgName }),
+      uploadLogo: (dataUrl) => request('/api/admin/branding/logo', 'POST', { dataUrl }),
+      removeLogo: () => request('/api/admin/branding/logo', 'DELETE')
     }
   };
 })();
@@ -155,7 +159,35 @@ const UI = (function () {
     return u;
   }
 
-  return { icon, esc, toast, hydrateIcons, copy, updatePill };
+  // Organisation branding (name and logo set by an admin in Settings). Defaults to Orynr.
+  let brand = { orgName: null, logo: null, credit: 'Created by SKDOSS', maker: 'Orynr', product: 'Intune Report Builder' };
+  const brandName = () => brand.orgName || brand.maker;
+  function title(text) { return `${text} · ${brandName()}`; }
+  function showBranding(b) {
+    brand = Object.assign(brand, b || {});
+    document.querySelectorAll('.brand-org').forEach(el => { el.textContent = brandName(); });
+    document.querySelectorAll('.brand-logo img').forEach(img => {
+      img.src = brand.logo || '/static/brand/logo.svg';
+      img.alt = brandName();
+    });
+    document.title = document.title.replace(/ · [^·]+$/, ' · ' + brandName());
+  }
+  async function applyBranding() {
+    try { showBranding(await API.branding()); } catch (e) { /* keep the defaults */ }
+    showSupportReminder();
+    return brand;
+  }
+
+  // From three months before the end of this version's support period, remind everyone.
+  function showSupportReminder() {
+    const s = brand.support;
+    const bar = document.querySelector('.topbar');
+    if (!bar || !s || !s.warn || document.querySelector('.support-bar')) return;
+    bar.insertAdjacentHTML('afterend', `<div class="support-bar" role="status">${icon('alert', 'sm')}<span>This version stops working on <b>${esc(s.untilText)}</b>
+      (${Number(s.daysLeft)} days left). Please obtain a new version by contacting <a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a>.</span></div>`);
+  }
+
+  return { icon, esc, toast, hydrateIcons, copy, updatePill, applyBranding, showBranding, title, brandName, getBrand: () => brand };
 })();
 
 
