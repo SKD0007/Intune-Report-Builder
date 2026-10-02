@@ -58,7 +58,7 @@
     const roles = (state.status && state.status.roles) || [];
     if (!perm || !roles.length) return true; // unknown → don't nag
     const needed = Array.isArray(perm) ? perm : [perm];
-    return needed.some(p => roles.includes(p) || roles.includes(p.replace('.Read.', '.ReadWrite.')) ||
+    return needed.some(p => roles.includes(p) || roles.includes(p.replace('.Read.', '.ReadWrite.')) || roles.includes(p.replace('.ReadBasic.', '.Read.')) ||
       (/^(User|Group|Device|Organization)\./.test(p) && (roles.includes('Directory.Read.All') || roles.includes('Directory.ReadWrite.All'))));
   }
   const permName = perm => Array.isArray(perm) ? perm[0] : perm;
@@ -188,9 +188,11 @@
     if (isEmpty(raw)) {
       return (typeof raw === 'string' && raw) ? '<span class="muted">Never</span>' : '<span class="muted">—</span>';
     }
-    if (typeof raw === 'boolean') return raw ? '<span class="yes">Yes</span>' : '<span class="no">No</span>';
     const base = key.split('.').pop();
     const tones = C.TONES[base];
+    // Yes/No fields where "Yes" is the bad news (e.g. "May not work") carry their own tones.
+    if (typeof raw === 'boolean' && tones) return `<span class="badge ${tones[String(raw)] || ''}">${raw ? 'Yes' : 'No'}</span>`;
+    if (typeof raw === 'boolean') return raw ? '<span class="yes">Yes</span>' : '<span class="no">No</span>';
     if (tones && typeof raw === 'string') {
       return `<span class="badge ${tones[raw] || ''}">${esc(valueLabel(key, raw))}</span>`;
     }
@@ -510,11 +512,13 @@
     v.abort = new AbortController();
     renderReport();
     try {
-      const res = await API.query(path, v.abort.signal);
+      // "view:<name>" sources are combined reports built on the server from several Graph calls.
+      const res = path.startsWith('view:') ? await API.view(path.slice(5), v.abort.signal) : await API.query(path, v.abort.signal);
       const shaped = analyse(res.rows || []);
       shaped.fetchedAt = Date.now();
       shaped.truncated = res.truncated;
       shaped.dropped = res.droppedFields || [];
+      shaped.notes = res.notes || [];
       state.cache.set(path, shaped);
       if (state.view !== v) return;
       v.data = shaped;
@@ -709,6 +713,7 @@
     const age = Math.round((Date.now() - d.fetchedAt) / 60000);
     const notices = [];
     if (d.truncated) notices.push(`<div class="banner warn">${icon('alert')}<div class="grow"><b>Only the first ${fmtNum(d.rows.length)} records were loaded.</b>Add a filter to the Graph query, or raise AGB_MAX_ROWS on the server.</div></div>`);
+    if (d.notes && d.notes.length) notices.push(`<div class="banner info">${icon('info')}<div class="grow"><b>Some parts couldn't be read, so they're not in this report.</b>${d.notes.map(n => esc(n)).join('<br>')}</div></div>`);
     if (def.isNew) notices.push(`<div class="banner info">${icon('wand')}<div class="grow"><b>Step 2 of 2: make it yours.</b>Use <b>Columns</b> to pick what to show, <b>Add filter</b> to narrow it down, then <b>Save as my report</b>.</div></div>`);
 
     $app.innerHTML = `<div class="page wide">${head}${notices.join('')}
@@ -789,7 +794,7 @@
   // ------------------------------------------------------------ record details
   function openDetails(row) {
     const d = state.view.data;
-    const title = row.deviceName || row.displayName || row.name || row.userPrincipalName || row.serialNumber || 'Record details';
+    const title = row.deviceName || row.itemName || row.displayName || row.name || row.sourceApp || row.connector || row.userPrincipalName || row.serialNumber || 'Record details';
     const keys = d.order.filter(k => !isEmpty(row[k]));
     const empties = d.order.length - keys.length;
     const el = openLayer(`
@@ -1069,6 +1074,7 @@
   renderConn();
   window.addEventListener('hashchange', route);
   route();
+  UI.updatePill();
   loadStatus().then(() => {
     if (isHome()) renderHome();
     else if (location.hash === '#/new') renderSourcePicker();

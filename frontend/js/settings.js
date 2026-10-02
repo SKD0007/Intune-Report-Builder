@@ -10,7 +10,7 @@
   const { icon, esc, toast } = UI;
   const $root = document.getElementById('settings');
   const logoutBtn = document.getElementById('logoutBtn');
-  const VERSION = '2.0.5';
+  const VERSION = '2.0.7';
   let st = null;     // admin state from the server
   let roles = null;  // granted application permissions (null = unknown)
 
@@ -110,7 +110,70 @@
         <div class="k">License</div><div>Apache License 2.0. You may use, change and share it, as long as you keep the credit to Orynr and Sai Kamal Doss (SKDOSS).</div>
         <div class="k">Open source</div><div>Runs on Python and open-source libraries such as FastAPI, Uvicorn, HTTPX and cryptography. Their licences are in the THIRD_PARTY_LICENSES folder where the app is installed. Thank you to their authors.</div>
       </div>
-    </section>`;
+    </section>
+    <section class="card card-pad" id="updCard"><div class="muted small">Checking for updates…</div></section>`;
+    loadUpdate(false);
+  }
+
+  // ------------------------------------------------------------------ updates
+  let upd = null;
+
+  function ago(sec) {
+    const m = Math.round((Date.now() / 1000 - sec) / 60);
+    return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+  }
+
+  function updateHtml(u, admin) {
+    if (!u) return '<div class="muted small">Couldn\'t get update information from this server.</div>';
+    const head = `<div class="step-head"><span class="step-num ${u.updateAvailable ? '' : 'done'}">${icon(u.updateAvailable ? 'download' : 'check', 'sm')}</span>
+      <div><h2>Updates</h2><p>You have version <b>${esc(u.current)}</b>.</p></div></div>`;
+    let body;
+    if (!u.enabled) {
+      body = `<p class="muted">Update checks are switched off.${admin ? '' : ' An admin can turn them on in <a href="#/admin">Administrative tasks</a>.'}</p>`;
+    } else if (u.updateAvailable) {
+      body = `<div class="banner info">${icon('download')}<div class="grow"><b>Version ${esc(u.latest)} is available.</b>
+          Run the installer on this server as an administrator. It upgrades in place and keeps the port, settings, connection and saved reports.</div></div>
+        <div class="form-actions">
+          ${u.downloadUrl ? `<a class="btn primary" href="${esc(u.downloadUrl)}" rel="noopener" target="_blank">${icon('download', 'sm')}Download installer${u.sizeMB ? ` (${esc(u.sizeMB)} MB)` : ''}</a>` : ''}
+          <a class="btn" href="${esc(u.releaseUrl || u.releasesPage)}" rel="noopener" target="_blank">What's new</a>
+        </div>
+        ${u.sha256 ? `<p class="muted small" style="margin-top:8px">SHA-256 of the installer: <code class="mono">${esc(u.sha256)}</code></p>` : ''}`;
+    } else if (u.error) {
+      body = `<p class="muted">${esc(u.error)} You can always find new versions on <a href="${esc(u.releasesPage)}" rel="noopener" target="_blank">GitHub</a>.</p>`;
+    } else {
+      body = `<p>${icon('check', 'sm')} You're on the latest version.</p>`;
+    }
+    const when = u.enabled && u.checkedAt ? `<span class="muted small">Last checked ${ago(u.checkedAt)}.</span>` : '';
+    const ctl = admin ? `<hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
+        <label class="check"><input type="checkbox" id="updToggle" ${u.enabled ? 'checked' : ''}> Check GitHub for new versions once a day</label>
+        <p class="muted small" style="margin:6px 0 10px">Only this app's version number is sent. Nothing is downloaded or installed automatically.</p>
+        <div class="form-actions"><button class="btn" id="updCheck" ${u.enabled ? '' : 'disabled'}>${icon('refresh', 'sm')}Check now</button>${when}</div>`
+      : (when ? `<div style="margin-top:10px">${when}</div>` : '');
+    return head + body + ctl;
+  }
+
+  function drawUpdate(admin) {
+    const box = document.getElementById('updCard');
+    if (!box) return;
+    box.innerHTML = updateHtml(upd, admin);
+    const t = document.getElementById('updToggle');
+    if (t) t.onchange = async () => {
+      try { upd = await API.admin.updateSettings(t.checked); toast(t.checked ? 'Update checks on' : 'Update checks off'); }
+      catch (err) { toast(err.message, 'bad'); }
+      drawUpdate(admin); UI.updatePill();
+    };
+    const b = document.getElementById('updCheck');
+    if (b) b.onclick = async () => {
+      b.disabled = true;
+      try { upd = await API.admin.checkUpdate(); toast(upd.error ? 'Check failed' : (upd.updateAvailable ? 'An update is available' : "You're up to date"), upd.error ? 'bad' : ''); }
+      catch (err) { toast(err.message, 'bad'); }
+      drawUpdate(admin); UI.updatePill();
+    };
+  }
+
+  async function loadUpdate(admin) {
+    try { upd = await API.update(); } catch (e) { upd = null; }
+    drawUpdate(admin);
   }
 
   // ------------------------------------------------------------------ admin
@@ -251,16 +314,19 @@
         <hr style="border:0;border-top:1px solid var(--border);margin:20px 0">
         <div class="form-actions"><button class="btn danger" id="disconnect" ${connected ? '' : 'disabled'}>${icon('trash', 'sm')}Remove Microsoft connection</button>
           <span class="muted small">Deletes the saved tenant, client ID and secret from this server.</span></div>
-      </section>`;
+      </section>
+
+      <section class="card card-pad" id="updCard"><div class="muted small">Checking for updates…</div></section>`;
 
     drawPermissions();
     wireAdmin();
+    loadUpdate(true);
   }
 
   function drawPermissions() {
     const box = document.getElementById('perms');
     if (!box) return;
-    const granted = p => roles && (roles.includes(p) || roles.includes(p.replace('.Read.', '.ReadWrite.')) ||
+    const granted = p => roles && (roles.includes(p) || roles.includes(p.replace('.Read.', '.ReadWrite.')) || roles.includes(p.replace('.ReadBasic.', '.Read.')) ||
       (/^(User|Group|Device|Organization)\./.test(p) && (roles.includes('Directory.Read.All') || roles.includes('Directory.ReadWrite.All'))));
     const known = Array.isArray(roles);
     const okCount = known ? C.PERMISSIONS.filter(p => granted(p.name)).length : 0;
@@ -338,4 +404,5 @@
 
   window.addEventListener('hashchange', render);
   render();
+  UI.updatePill();
 })();

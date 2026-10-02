@@ -21,23 +21,64 @@
     users: 'User.Read.All',
     groups: 'Group.Read.All',
     entraDevices: 'Device.Read.All',
-    org: 'Organization.Read.All'
+    org: 'Organization.Read.All',
+    bitlocker: 'BitLockerKey.ReadBasic.All',
+    laps: 'DeviceLocalCredential.ReadBasic.All'
   };
 
   // What each permission unlocks (shown on the Settings page).
   const PERMISSIONS = [
     { name: P.devices, unlocks: 'Managed devices, discovered apps, malware' },
-    { name: P.config, unlocks: 'Compliance & configuration policies, scripts, encryption' },
-    { name: P.apps, unlocks: 'Apps, app protection, Intune audit log' },
-    { name: P.service, unlocks: 'Autopilot devices & enrollment settings' },
+    { name: P.config, unlocks: 'Compliance & configuration policies and their assignments, scripts, encryption' },
+    { name: P.apps, unlocks: 'Apps, app assignments, supersedence & dependencies, app protection, Intune audit log' },
+    { name: P.service, unlocks: 'Autopilot, enrollment settings, connectors & Apple tokens' },
     { name: P.users, unlocks: 'Users' },
-    { name: P.groups, unlocks: 'Groups' },
+    { name: P.groups, unlocks: 'Groups, plus group names and member counts in assignment reports' },
     { name: P.entraDevices, unlocks: 'Entra ID devices' },
-    { name: P.org, unlocks: 'Licenses' }
+    { name: P.org, unlocks: 'Licenses' },
+    { name: P.bitlocker, unlocks: 'Which devices have a BitLocker recovery key saved (never the key itself)' },
+    { name: P.laps, unlocks: 'Which devices have a LAPS password backed up (never the password itself)' }
   ];
 
   // Where data comes from. `permission` may be a list: any one of them is enough.
   const SOURCES = {
+    // ---- Combined reports, built on the server from several Graph calls ("view:<name>").
+    assignments: {
+      name: 'Assignments (everything)', icon: 'target', permission: [P.apps, P.config, P.service],
+      description: 'Every app, policy, profile and script with who it is assigned to: groups, include/exclude, filters and member counts.',
+      path: 'view:assignments',
+      columns: ['itemType', 'itemName', 'platform', 'intent', 'targetMode', 'target', 'deviceMembers', 'userMembers', 'filterName', 'filterMode']
+    },
+    appDetails: {
+      name: 'App details', icon: 'apps', permission: P.apps,
+      description: 'Every Intune app with its version, install command, detection rules and assignment counts.',
+      path: 'view:appDetails',
+      columns: ['displayName', '@odata.type', 'appVersion', 'publisher', 'installContext', 'requiredTargets', 'availableTargets', 'uninstallTargets', 'lastModifiedDateTime']
+    },
+    appRelationships: {
+      name: 'App supersedence & dependencies', icon: 'apps', permission: P.apps,
+      description: 'Which apps replace or depend on other apps, with their detection rules.',
+      path: 'view:appRelationships',
+      columns: ['relationship', 'sourceApp', 'sourceVersion', 'how', 'targetApp', 'targetVersion', 'atRisk', 'detectionOverlap']
+    },
+    connectors: {
+      name: 'Connectors & tokens', icon: 'plug', permission: P.service,
+      description: 'Apple push certificate, Apple enrollment and VPP tokens, Managed Google Play and other connectors: expiry and last sync.',
+      path: 'view:connectors',
+      columns: ['connector', 'name', 'health', 'expires', 'daysLeft', 'lastSync', 'status', 'detail']
+    },
+    windowsRecovery: {
+      name: 'BitLocker & LAPS backup', icon: 'key', permission: [P.bitlocker, P.laps],
+      description: 'Windows devices and whether their BitLocker recovery key and LAPS password are backed up to Entra ID.',
+      path: 'view:windowsRecovery',
+      columns: ['deviceName', 'userPrincipalName', 'isEncrypted', 'bitlockerKey', 'lastKeyBackup', 'lapsPassword', 'lapsLastBackup', 'lastSyncDateTime']
+    },
+    autopilotEntra: {
+      name: 'Autopilot devices vs Entra ID', icon: 'rocket', permission: P.service,
+      description: 'Autopilot devices checked against their Entra ID device object.',
+      path: 'view:autopilotEntra',
+      columns: ['serialNumber', 'model', 'groupTag', 'entraStatus', 'entraDeviceName', 'enrollmentState', 'intuneEnrolled', 'lastContactedDateTime']
+    },
     devices: {
       name: 'Intune managed devices', icon: 'device', permission: P.devices,
       description: 'Every device enrolled in Intune: owner, OS, compliance, hardware.',
@@ -171,6 +212,7 @@
     { id: 'devices', name: 'Devices', icon: 'device' },
     { id: 'security', name: 'Compliance & security', icon: 'shield' },
     { id: 'config', name: 'Configuration', icon: 'sliders' },
+    { id: 'assignments', name: 'Assignments', icon: 'target' },
     { id: 'apps', name: 'Apps', icon: 'apps' },
     { id: 'enrollment', name: 'Enrollment & Autopilot', icon: 'rocket' },
     { id: 'directory', name: 'Users, groups & licenses', icon: 'users' },
@@ -178,6 +220,7 @@
   ];
 
   const R = (o) => o;
+  const NA = ['Not assigned', "Couldn't read"]; // assignment rows that aren't real assignments
   const REPORTS = [
     // ---- Devices
     R({ id: 'all-devices', category: 'devices', source: 'devices', name: 'All managed devices',
@@ -245,6 +288,14 @@
       description: 'All compliance policies and their platform.', summaryBy: '@odata.type' }),
     R({ id: 'malware', category: 'security', source: 'malware', name: 'Malware detections',
       description: 'Threats Defender has found on managed devices.', summaryBy: 'severity' }),
+    R({ id: 'bitlocker-missing', category: 'security', source: 'windowsRecovery', name: 'Encrypted devices with no BitLocker key in Entra ID',
+      description: 'If one of these locks up, nobody can get the recovery key. Shows whether a key exists, never the key.',
+      filters: [{ col: 'isEncrypted', op: 'istrue' }, { col: 'bitlockerKey', op: 'in', value: ['Missing', 'Data drives only'] }], summaryBy: 'bitlockerKey' }),
+    R({ id: 'recovery-backup', category: 'security', source: 'windowsRecovery', name: 'BitLocker & LAPS backup status',
+      description: 'Every Windows device: BitLocker recovery key and local admin (LAPS) password saved to Entra ID or not.', summaryBy: 'bitlockerKey' }),
+    R({ id: 'laps-missing', category: 'security', source: 'windowsRecovery', name: 'Windows devices with no LAPS password backed up',
+      description: 'Devices where Windows LAPS has not saved a local admin password to Entra ID.',
+      filters: [{ col: 'lapsPassword', op: 'eq', value: 'Missing' }], summaryBy: 'joinType' }),
     R({ id: 'jailbroken', category: 'security', source: 'devices', name: 'Jailbroken / rooted devices',
       description: 'Mobile devices reported as jailbroken or rooted.',
       columns: ['deviceName', 'userDisplayName', 'operatingSystem', 'osVersion', 'jailBroken', 'lastSyncDateTime'],
@@ -265,7 +316,52 @@
     R({ id: 'remediations', category: 'config', source: 'remediations', name: 'Remediations',
       description: 'Detection & remediation script packages.', summaryBy: 'publisher' }),
 
+    // ---- Assignments
+    R({ id: 'all-assignments', category: 'assignments', source: 'assignments', name: 'Everything assigned, and to whom',
+      description: 'Apps, policies, profiles, scripts and more in one list, with groups, filters and member counts.',
+      filters: [{ col: 'targetKind', op: 'notin', value: NA }], summaryBy: 'itemType' }),
+    R({ id: 'app-assignments', category: 'assignments', source: 'assignments', name: 'App assignments',
+      description: 'Each app and who gets it: Required, Available or Uninstall, included or excluded.',
+      columns: ['itemName', '@odata.type', 'intent', 'targetMode', 'target', 'deviceMembers', 'userMembers', 'filterName', 'filterMode', 'deadline'],
+      filters: [{ col: 'itemType', op: 'eq', value: 'App' }], summaryBy: 'intent' }),
+    R({ id: 'policy-assignments', category: 'assignments', source: 'assignments', name: 'Policy & profile assignments',
+      description: 'Compliance, configuration, security, update and enrollment policies and who they apply to.',
+      filters: [{ col: 'itemType', op: 'ne', value: 'App' }, { col: 'targetKind', op: 'notin', value: NA }], summaryBy: 'itemType' }),
+    R({ id: 'assignments-by-group', category: 'assignments', source: 'assignments', name: 'Where each group is used',
+      description: 'Pick a group in the summary to see everything assigned to it.',
+      columns: ['target', 'groupType', 'deviceMembers', 'userMembers', 'targetMode', 'itemType', 'itemName', 'intent'],
+      filters: [{ col: 'targetKind', op: 'notin', value: NA }], sort: { col: 'target', dir: 'asc' }, summaryBy: 'target' }),
+    R({ id: 'all-users-devices', category: 'assignments', source: 'assignments', name: 'Assigned to All users or All devices',
+      description: 'Broad assignments that reach everyone. Worth a second look.',
+      filters: [{ col: 'targetKind', op: 'in', value: ['All users', 'All devices'] }], summaryBy: 'itemType' }),
+    R({ id: 'exclusions', category: 'assignments', source: 'assignments', name: 'Exclusions',
+      description: 'Groups that are excluded from an app or policy.',
+      filters: [{ col: 'targetMode', op: 'eq', value: 'Exclude' }], summaryBy: 'itemType' }),
+    R({ id: 'filter-usage', category: 'assignments', source: 'assignments', name: 'Assignment filters in use',
+      description: 'Which assignments use a filter, and which filter.',
+      columns: ['filterName', 'filterMode', 'filterPlatform', 'filterRule', 'itemType', 'itemName', 'target'],
+      filters: [{ col: 'filterName', op: 'notempty' }], summaryBy: 'filterName' }),
+    R({ id: 'empty-group-assignments', category: 'assignments', source: 'assignments', name: 'Assigned to empty or deleted groups',
+      description: 'These assignments reach nobody: the group has no members or no longer exists.',
+      columns: ['itemType', 'itemName', 'intent', 'targetMode', 'target', 'targetKind', 'groupType', 'deviceMembers', 'userMembers'],
+      filters: [{ col: 'emptyTarget', op: 'istrue' }], summaryBy: 'itemType' }),
+    R({ id: 'unassigned-policies-all', category: 'assignments', source: 'assignments', name: 'Policies & profiles not assigned to anyone',
+      description: 'Created but never assigned, across every policy type. (For apps, see Unassigned apps.)',
+      columns: ['itemType', 'itemName', 'platform', 'lastModifiedDateTime'],
+      filters: [{ col: 'targetKind', op: 'eq', value: 'Not assigned' }], summaryBy: 'itemType' }),
+
     // ---- Apps
+    R({ id: 'app-details', category: 'apps', source: 'appDetails', name: 'App versions & install details',
+      description: 'Version, install command, run-as context, detection rules and how many groups get each app.', summaryBy: '@odata.type' }),
+    R({ id: 'win32-apps', category: 'apps', source: 'appDetails', name: 'Win32 apps: install commands & detection',
+      description: 'Everything you need to check a Win32 app package at a glance.',
+      columns: ['displayName', 'appVersion', 'installCommandLine', 'uninstallCommandLine', 'installContext', 'detection', 'sizeMB'],
+      filters: [{ col: '@odata.type', op: 'eq', value: '#microsoft.graph.win32LobApp' }], summaryBy: 'installContext' }),
+    R({ id: 'app-relationships', category: 'apps', source: 'appRelationships', name: 'App supersedence & dependencies',
+      description: 'Which apps replace or need other apps. Risky supersedence (same detection rule on both apps) is flagged.', summaryBy: 'relationship' }),
+    R({ id: 'risky-supersedence', category: 'apps', source: 'appRelationships', name: 'Supersedence that may not work',
+      description: 'Both apps are detected the same way, so Intune may treat the new app as already installed.',
+      filters: [{ col: 'atRisk', op: 'istrue' }], summaryBy: 'detectionOverlap' }),
     R({ id: 'all-apps', category: 'apps', source: 'mobileApps', name: 'All apps in Intune',
       description: 'Every app added to Intune and its type.', summaryBy: '@odata.type' }),
     R({ id: 'unassigned-apps', category: 'apps', source: 'mobileApps', name: 'Unassigned apps',
@@ -286,6 +382,12 @@
     R({ id: 'autopilot-no-profile', category: 'enrollment', source: 'autopilot', name: 'Autopilot devices without a profile',
       description: 'Devices that will not get an Autopilot experience yet.',
       filters: [{ col: 'deploymentProfileAssignmentStatus', op: 'notin', value: ['assignedInSync', 'assignedOutOfSync', 'assignedUnkownSyncState'] }], summaryBy: 'deploymentProfileAssignmentStatus' }),
+    R({ id: 'autopilot-entra', category: 'enrollment', source: 'autopilotEntra', name: 'Autopilot devices with a missing Entra ID device',
+      description: 'The Entra ID device object is missing or disabled, so Autopilot can fail or apply the wrong profile.',
+      filters: [{ col: 'entraStatus', op: 'in', value: ['Entra device missing', 'Entra device disabled', 'No Entra device linked'] }], summaryBy: 'entraStatus' }),
+    R({ id: 'connectors', category: 'enrollment', source: 'connectors', name: 'Connectors & tokens: expiry and sync',
+      description: 'Apple push certificate, Apple enrollment and VPP tokens, Managed Google Play and other connectors.',
+      sort: { col: 'daysLeft', dir: 'asc' }, summaryBy: 'health' }),
     R({ id: 'autopilot-profiles', category: 'enrollment', source: 'autopilotProfiles', name: 'Autopilot profiles',
       description: 'Deployment profiles and device naming templates.' }),
     R({ id: 'enrollment-configs', category: 'enrollment', source: 'enrollmentConfigs', name: 'Enrollment restrictions & settings',
@@ -345,7 +447,30 @@
     encryptionState: 'Encryption', encryptionReadinessState: 'Readiness', tpmSpecificationVersion: 'TPM version',
     encryptionPolicySettingState: 'Policy state', deviceType: 'Device type', runAsAccount: 'Runs as',
     fileName: 'File name', severity: 'Severity', lastDetectionDateTime: 'Last detected', priority: 'Priority',
-    isGlobalScript: 'Microsoft-provided', deviceNameTemplate: 'Device name template'
+    isGlobalScript: 'Microsoft-provided', deviceNameTemplate: 'Device name template',
+    // Assignments
+    itemType: 'What', itemName: 'Name', intent: 'Intent', targetMode: 'Include / exclude', target: 'Assigned to',
+    targetKind: 'Target type', groupType: 'Group type', deviceMembers: 'Devices in group', userMembers: 'Users in group',
+    filterName: 'Filter', filterMode: 'Filter mode', filterPlatform: 'Filter platform', filterRule: 'Filter rule',
+    itemId: 'Item ID', groupId: 'Group ID', notifications: 'User notifications', availableFrom: 'Available from',
+    deadline: 'Install deadline', emptyTarget: 'Reaches nobody',
+    // App details & relationships
+    appVersion: 'Version', sizeMB: 'Size (MB)', installCommandLine: 'Install command', uninstallCommandLine: 'Uninstall command',
+    installContext: 'Installs as', restartBehavior: 'Restart behavior', detection: 'Detection rules', packageIdentifier: 'Package ID',
+    requiredTargets: 'Required (groups)', availableTargets: 'Available (groups)', uninstallTargets: 'Uninstall (groups)',
+    excludedTargets: 'Excluded (groups)', supersedesCount: 'Supersedes (apps)', supersededByCount: 'Superseded by (apps)',
+    dependencyCount: 'Dependencies', publishingState: 'Publishing state',
+    relationship: 'Relationship', sourceApp: 'App', sourceVersion: 'App version', targetApp: 'Other app',
+    targetVersion: 'Other app version', how: 'Type', sourceDetection: 'App detection', targetDetection: 'Other app detection',
+    detectionOverlap: 'Shared detection', atRisk: 'May not work',
+    // Connectors
+    connector: 'Connector', health: 'Health', expires: 'Expires', daysLeft: 'Days left', lastSync: 'Last sync', detail: 'Details',
+    // BitLocker & LAPS
+    bitlockerKey: 'BitLocker key in Entra ID', bitlockerKeyCount: 'Keys saved', lastKeyBackup: 'Last key saved',
+    lapsPassword: 'LAPS password', lapsLastBackup: 'LAPS last backup',
+    // Autopilot vs Entra
+    entraStatus: 'Entra ID device', entraDeviceName: 'Entra device name', entraLastSignIn: 'Entra last sign-in',
+    intuneEnrolled: 'Enrolled in Intune', azureActiveDirectoryDeviceId: 'Entra device ID'
   };
 
   // Value translations for fields that hold codes.
@@ -370,7 +495,8 @@
     deploymentProfileAssignmentStatus: { unknown: 'Unknown', assigned: 'Assigned', assignedInSync: 'Assigned',
       assignedOutOfSync: 'Assigned (syncing)', assignedUnkownSyncState: 'Assigned', notAssigned: 'Not assigned', pending: 'Pending', failed: 'Failed' },
     groupTypes: { Unified: 'Microsoft 365', DynamicMembership: 'Dynamic' },
-    runAsAccount: { system: 'System', user: 'User' }
+    runAsAccount: { system: 'System', user: 'User' },
+    platform: { macOS: 'macOS', 'iOS/iPadOS': 'iOS/iPadOS' }
   };
 
   // Shown as coloured badges.
@@ -381,7 +507,16 @@
     activityResult: { Success: 'ok', Fail: 'bad', Failure: 'bad' },
     severity: { severe: 'bad', high: 'bad', moderate: 'warn', low: 'neutral' },
     jailBroken: { True: 'bad', False: 'ok' },
-    capabilityStatus: { Enabled: 'ok', Suspended: 'warn', Deleted: 'bad', Warning: 'warn' }
+    capabilityStatus: { Enabled: 'ok', Suspended: 'warn', Deleted: 'bad', Warning: 'warn' },
+    intent: { Required: 'ok', Uninstall: 'bad', Available: 'neutral', 'Available Without Enrollment': 'neutral' },
+    targetMode: { Exclude: 'warn' },
+    targetKind: { 'Deleted group': 'bad', 'All users': 'warn', 'All devices': 'warn', "Couldn't read": 'warn' },
+    health: { OK: 'ok', 'Expires soon': 'warn', 'Not syncing': 'warn', Expired: 'bad', Error: 'bad' },
+    bitlockerKey: { 'Backed up': 'ok', Missing: 'bad', 'Data drives only': 'warn' },
+    lapsPassword: { 'Backed up': 'ok', Missing: 'warn' },
+    atRisk: { true: 'bad', false: 'ok' },
+    emptyTarget: { true: 'bad' },
+    entraStatus: { OK: 'ok', 'Entra device missing': 'bad', 'Entra device disabled': 'warn', 'No Entra device linked': 'warn' }
   };
 
   // Code-like text fields that should be shown "Split Into Words" when no translation exists.
@@ -391,7 +526,8 @@
     'complianceState', 'runAsAccount', 'state', 'status'];
 
   // Dates where "how long ago" matters.
-  const RELATIVE_DATES = ['lastSyncDateTime', 'approximateLastSignInDateTime', 'lastContactedDateTime', 'lastDetectionDateTime', 'enrolledDateTime'];
+  const RELATIVE_DATES = ['lastSyncDateTime', 'approximateLastSignInDateTime', 'lastContactedDateTime', 'lastDetectionDateTime', 'enrolledDateTime',
+    'lastSync', 'lastKeyBackup', 'lapsLastBackup', 'entraLastSignIn', 'expires'];
 
   const ODATA_TYPES = {
     win32LobApp: 'Windows app (Win32)', winGetApp: 'Microsoft Store app', officeSuiteApp: 'Microsoft 365 Apps',

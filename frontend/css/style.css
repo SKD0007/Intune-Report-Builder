@@ -206,6 +206,15 @@ body > main { flex: 1; }
   background: var(--surface-2); border: 1px solid var(--border);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.update-pill {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-text); border: 1px solid transparent;
+}
+.update-pill:hover { text-decoration: none; filter: brightness(1.08); }
+.update-pill svg.i { width: 14px; height: 14px; }
+label.check { display: flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer; }
+label.check input { width: 16px; height: 16px; accent-color: var(--accent); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
 
@@ -516,6 +525,7 @@ details.help li { margin: 5px 0; }
 @media (max-width: 720px) {
   .topbar { padding: 0 12px; gap: 8px; }
   .conn .txt { display: none; }
+  .update-pill span { display: none; }
   .brand-app { display: none; }
   .page { padding: 20px 16px 50px; }
   .hero .search-box { width: 100%; }

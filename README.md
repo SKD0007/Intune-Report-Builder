@@ -10,7 +10,7 @@
 </p>
 
 <h3 align="center">
-  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.5/Orynr-IntuneReportBuilder-Setup-2.0.5.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.5.exe, 15 MB)</a>
+  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.7/Orynr-IntuneReportBuilder-Setup-2.0.7.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.7.exe, 15 MB)</a>
 </h3>
 <p align="center">
   Or see <a href="https://github.com/SKD0007/Intune-Report-Builder/releases">all releases</a> · Install steps <a href="#install">below</a>
@@ -35,10 +35,14 @@
 
 Intune Report Builder connects to your Microsoft tenant **read-only** and turns Intune and Entra ID data into clear, ready-made reports:
 
-- **40+ reports out of the box:** non-compliant devices, devices that haven't checked in for 30+ days, unencrypted devices, Windows / iPhone / Android / Mac inventories, Autopilot devices without a profile, unassigned apps and policies, discovered software, licenses, guest and disabled users, and the Intune change log.
+- **60 reports out of the box:** non-compliant devices, devices that haven't checked in for 30+ days, unencrypted devices, Windows / iPhone / Android / Mac inventories, Autopilot devices without a profile, unassigned apps and policies, discovered software, licenses, guest and disabled users, and the Intune change log.
+- **Who gets what:** one list of everything assigned in Intune (apps, compliance, configuration, settings catalog, endpoint security, baselines, scripts, remediations, Windows updates, Autopilot, enrollment, app protection, policy sets and more) with the group, include/exclude, assignment filter and how many devices and users each group holds. Spot assignments to All users / All devices, exclusions, filters in use, and assignments to empty or deleted groups.
+- **App deep-dive:** versions, install commands, run-as context and detection rules for every app, plus supersedence and dependencies, with supersedence flagged when both apps are detected the same way.
+- **Health checks:** Apple push certificate, Apple enrollment and VPP token expiry, Managed Google Play and connector sync, Windows devices without a BitLocker recovery key or LAPS password in Entra ID, and Autopilot devices whose Entra ID device is missing.
 - **Plain English everywhere:** `complianceState: noncompliant` becomes a red **Not compliant** badge, `lastSyncDateTime` becomes **Last check-in: 35 days ago**, and `freeStorageSpaceInBytes` becomes **Free storage: 12.4 GB**.
 - **Filter, summarize, drill in:** add filters from drop-downs of real values, click a summary bar to narrow down, and click any row to see every detail of that device, user or app.
 - **Export to Excel** with readable headers and values, exactly as you see it.
+- **Update notifier:** an *Update available* button appears when a new version is published, with a direct download link.
 - **Save your own reports:** columns, filters and sort order are saved for the whole team, and the data is always fetched fresh.
 - **Build your own:** pick any data source, choose columns and filters, and save it. Experts can run any read-only Microsoft Graph query.
 
@@ -116,11 +120,13 @@ On the server, open **Settings → Administrative tasks**:
 | Permission | Unlocks |
 |---|---|
 | DeviceManagementManagedDevices.Read.All | Managed devices, discovered apps, malware |
-| DeviceManagementConfiguration.Read.All | Compliance & configuration policies, scripts, encryption |
-| DeviceManagementApps.Read.All | Apps, app protection, Intune audit log |
-| DeviceManagementServiceConfig.Read.All | Autopilot & enrollment settings |
-| User.Read.All · Group.Read.All · Device.Read.All | Users, groups, Entra ID devices |
+| DeviceManagementConfiguration.Read.All | Compliance & configuration policies and their assignments, scripts, encryption |
+| DeviceManagementApps.Read.All | Apps, app assignments, supersedence & dependencies, app protection, Intune audit log |
+| DeviceManagementServiceConfig.Read.All | Autopilot, enrollment settings, connectors & Apple tokens |
+| User.Read.All · Group.Read.All · Device.Read.All | Users, groups (and group names and member counts in assignment reports), Entra ID devices |
 | Organization.Read.All | Licenses |
+| BitLockerKey.ReadBasic.All | Which Windows devices have a BitLocker recovery key in Entra ID. *Basic* means the keys themselves can't be read. |
+| DeviceLocalCredential.ReadBasic.All | Which Windows devices have a LAPS password backed up. *Basic* means the passwords themselves can't be read. |
 
 4. **Share the link** `http://<server-name>:8080/` with your team.
 
@@ -130,7 +136,8 @@ On the server, open **Settings → Administrative tasks**:
 - **Least privilege:** the service runs as the built-in low-privilege *Local Service* account.
 - **Secrets stay on the server:** the client secret is encrypted at rest and never returned to a browser. The admin password is stored only as a salted hash.
 - **Locked-down settings page:** first-time admin setup only works on the server itself, sign-in locks out after repeated wrong passwords, and the web pages are served with strict security headers.
-- **No phone-home:** nothing is sent to Orynr.
+- **No phone-home:** nothing is sent to Orynr, and none of your tenant data leaves your network.
+- **Update notifier:** once a day the server asks GitHub whether a newer version exists and shows an *Update available* button. Only the app's version number is sent, and nothing is downloaded or installed automatically. Admins can switch it off in **Settings → Administrative tasks**.
 
 > Anyone who can open the reports link can see the reports. Share it only with people who should see your device and user data, and keep the firewall option limited to trusted networks.
 

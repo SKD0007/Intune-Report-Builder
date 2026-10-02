@@ -38,9 +38,11 @@ const API = (function () {
   return {
     status: () => request('/api/status', 'GET'),
     query: (q, signal) => request('/api/graph/query', 'POST', { query: q }, signal),
+    view: (name, signal) => request('/api/graph/view', 'POST', { name }, signal),
     reports: () => request('/api/reports', 'GET'),
     saveReport: (r) => request('/api/reports', 'POST', r),
     deleteReport: (id) => request('/api/reports/' + encodeURIComponent(id), 'DELETE'),
+    update: () => request('/api/update', 'GET'),
     admin: {
       state: () => request('/api/admin/state', 'GET'),
       setup: (username, password) => request('/api/admin/setup', 'POST', { username, password }),
@@ -49,7 +51,9 @@ const API = (function () {
       changeLogin: (current, username, next) => request('/api/admin/password', 'POST', { current, username: username || null, new: next || null }),
       saveCredentials: (c) => request('/api/admin/credentials', 'POST', c),
       test: () => request('/api/admin/test', 'POST'),
-      disconnect: () => request('/api/admin/disconnect', 'POST')
+      disconnect: () => request('/api/admin/disconnect', 'POST'),
+      checkUpdate: () => request('/api/admin/update/check', 'POST'),
+      updateSettings: (enabled) => request('/api/admin/update/settings', 'POST', { enabled })
     }
   };
 })();
@@ -82,6 +86,8 @@ const UI = (function () {
     down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    plug: '<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>',
     report: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 13h6M9 17h6M9 9h3"/>',
     wand: '<path d="M4 20L16 8M14 6l4 4"/><path d="M18 2v3M20.5 3.5h-3M7 3v2M8 4H6M20 13v2M21 14h-2"/>',
     copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/>',
@@ -126,5 +132,19 @@ const UI = (function () {
     if (!ok) throw new Error('your browser blocked it');
   }
 
-  return { icon, esc, toast, hydrateIcons, copy };
+  // "Update available" pill in the top bar. The server asks GitHub at most once a day.
+  async function updatePill() {
+    let u;
+    try { u = await API.update(); } catch (e) { return null; }
+    const bar = document.querySelector('.topbar');
+    const old = bar && bar.querySelector('.update-pill');
+    if (old) old.remove();
+    if (bar && u.updateAvailable) {
+      bar.querySelector('.spacer').insertAdjacentHTML('afterend',
+        `<a class="update-pill" href="/settings#/about" title="Version ${esc(u.latest)} is available. You have ${esc(u.current)}.">${icon('download', 'sm')}<span>Update available: ${esc(u.latest)}</span></a>`);
+    }
+    return u;
+  }
+
+  return { icon, esc, toast, hydrateIcons, copy, updatePill };
 })();
