@@ -118,28 +118,37 @@ On the server, open **Settings → Administrative tasks**:
 
 1. **Create the admin login** (username and password). Only Administrative tasks need it. Viewing reports and changing the theme don't.
 2. **Connect to Microsoft:** create an app registration in Entra ID (the page walks you through it) and paste the Tenant ID, Client ID and client secret. The secret is stored encrypted and never sent to a browser.
-3. **Grant permissions:** add these Microsoft Graph **application** permissions and click **Grant admin consent**. Each one unlocks a group of reports; skip any you don't need.
+3. **Grant permissions:** add these Microsoft Graph **application** permissions and click **Grant admin consent**. Settings shows which ones are granted, and which Microsoft licences your tenant has.
+
+   **Core** (the Intune, user and group reports):
 
 | Permission | Unlocks |
 |---|---|
-| DeviceManagementManagedDevices.Read.All | Managed devices, discovered apps, malware |
+| DeviceManagementManagedDevices.Read.All | Managed devices, hardware inventory, discovered apps, malware, Endpoint analytics |
 | DeviceManagementConfiguration.Read.All | Compliance & configuration policies and their assignments, scripts, encryption |
-| DeviceManagementApps.Read.All | Apps, app assignments, supersedence & dependencies, app protection, Intune audit log |
+| DeviceManagementApps.Read.All | Apps, app assignments, install status, supersedence & dependencies, app protection, Intune audit log |
 | DeviceManagementServiceConfig.Read.All | Autopilot, enrollment settings, connectors & Apple tokens |
 | User.Read.All · Group.Read.All · Device.Read.All | Users, groups (and group names and member counts in assignment reports), Entra ID devices |
-| Organization.Read.All | Licenses |
-| DeviceManagementRBAC.Read.All | Intune roles, role assignments and scope tags |
-| CloudPC.Read.All | Windows 365 Cloud PCs, provisioning and connections |
-| Application.Read.All | App registrations and enterprise apps, including when their secrets and certificates expire |
-| Policy.Read.All | Conditional Access, named locations, authentication methods, tenant policies |
-| AuditLog.Read.All | Last sign-in per user, MFA registration, sign-in and Entra audit logs (some need Entra ID P1) |
-| RoleManagement.Read.Directory | Entra ID admin roles and eligible (PIM) roles |
-| ServiceHealth.Read.All · ServiceMessage.Read.All | Microsoft 365 service health and message center |
-| SecurityEvents.Read.All · SecurityAlert.Read.All · SecurityIncident.Read.All | Secure Score, Defender XDR alerts and incidents |
-| IdentityRiskyUser.Read.All · IdentityRiskEvent.Read.All | Risky users and risk detections (Entra ID P2) |
-| Directory.Read.All | Domains, administrative units, app consents, deleted users and groups |
-| BitLockerKey.ReadBasic.All | Which Windows devices have a BitLocker recovery key in Entra ID. *Basic* means the keys themselves can't be read. |
-| DeviceLocalCredential.ReadBasic.All | Which Windows devices have a LAPS password backed up. *Basic* means the passwords themselves can't be read. |
+| Organization.Read.All | Licenses, and detecting which Microsoft licences your tenant has |
+
+   **Optional** (add only the ones you want; reports that need a missing one say so):
+
+| Permission | Unlocks | Licence needed |
+|---|---|---|
+| BitLockerKey.ReadBasic.All | Which Windows devices have a BitLocker recovery key in Entra ID. *Basic* means the keys themselves can't be read. | |
+| DeviceLocalCredential.ReadBasic.All | Which Windows devices have a LAPS password backed up. *Basic* means the passwords themselves can't be read. | |
+| DeviceManagementRBAC.Read.All | Intune roles, role assignments and scope tags | |
+| CloudPC.Read.All | Windows 365 Cloud PCs, provisioning and connections | Windows 365 |
+| Application.Read.All | App registrations and enterprise apps, including when their secrets and certificates expire | |
+| Policy.Read.All | Conditional Access, named locations, authentication methods, tenant policies | Entra ID P1 (Conditional Access) |
+| AuditLog.Read.All | Last sign-in per user, MFA registration, sign-in and Entra audit logs | Entra ID P1 (sign-ins, MFA registration) |
+| RoleManagement.Read.Directory | Entra ID admin roles, and eligible (PIM) roles | Entra ID P2 (PIM) |
+| ServiceHealth.Read.All · ServiceMessage.Read.All | Microsoft 365 service health and message center | |
+| SecurityEvents.Read.All · SecurityAlert.Read.All · SecurityIncident.Read.All | Secure Score, Defender XDR alerts and incidents | Defender (alerts, incidents) |
+| IdentityRiskyUser.Read.All · IdentityRiskEvent.Read.All | Risky users and risk detections | Entra ID P2 |
+| Directory.Read.All | Domains, administrative units, app consents, deleted users and groups | |
+
+   All Intune reports need a Microsoft Intune licence in the tenant.
 
 4. **Share the link** `http://<server-name>:8080/` with your team.
 
