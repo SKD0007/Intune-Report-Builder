@@ -166,7 +166,7 @@ On the server, open **Settings → Administrative tasks**:
 
 ## Uninstall
 
-Use **Settings → Apps** (or *Add or remove programs*). The service and firewall rule are removed. You'll be asked whether to keep your saved settings and reports for a later reinstall.
+Use **Settings → Apps** (or *Add or remove programs*). Everything is removed: the service, the firewall rule and all saved data (the Microsoft connection including its client secret, the admin login, saved reports, branding and logs). Installing a new version over an old one is not an uninstall, so upgrades keep your settings.
 
 ## License
 
