@@ -30,6 +30,10 @@ const API = (function () {
       const err = new Error(message);
       err.kind = kind;
       err.status = r.status;
+      // Windows sign-in is required: send the browser through the sign-in handshake and back.
+      if (kind === 'signin' && !path.startsWith('/api/auth/')) {
+        location.href = '/auth/windows?next=' + encodeURIComponent(location.pathname + location.hash);
+      }
       throw err;
     }
     return data;
@@ -44,6 +48,9 @@ const API = (function () {
     deleteReport: (id) => request('/api/reports/' + encodeURIComponent(id), 'DELETE'),
     update: () => request('/api/update', 'GET'),
     branding: () => request('/api/branding', 'GET'),
+    me: () => request('/api/auth/me', 'GET'),
+    alerts: (refresh) => request('/api/alerts' + (refresh ? '?refresh=true' : ''), 'GET'),
+    signOut: () => request('/api/auth/logout', 'POST'),
     jobs: {
       start: (name, force) => request('/api/jobs', 'POST', { name, force: !!force }),
       get: (id) => request('/api/jobs/' + encodeURIComponent(id), 'GET'),
@@ -63,7 +70,11 @@ const API = (function () {
       updateSettings: (enabled) => request('/api/admin/update/settings', 'POST', { enabled }),
       saveBranding: (orgName) => request('/api/admin/branding', 'POST', { orgName }),
       uploadLogo: (dataUrl) => request('/api/admin/branding/logo', 'POST', { dataUrl }),
-      removeLogo: () => request('/api/admin/branding/logo', 'DELETE')
+      removeLogo: () => request('/api/admin/branding/logo', 'DELETE'),
+      getAccess: () => request('/api/admin/access', 'GET'),
+      saveAccess: (cfg) => request('/api/admin/access', 'POST', cfg),
+      getAlerts: () => request('/api/admin/alerts', 'GET'),
+      saveAlerts: (enabled, days) => request('/api/admin/alerts', 'POST', { enabled, days })
     }
   };
 })();
@@ -187,7 +198,29 @@ const UI = (function () {
       (${Number(s.daysLeft)} days left). To keep using it, please obtain a new copy from <a href="mailto:${esc(s.contact)}">${esc(s.contact)}</a>.</span></div>`);
   }
 
-  return { icon, esc, toast, hydrateIcons, copy, updatePill, applyBranding, showBranding, title, brandName, getBrand: () => brand };
+  // Who is signed in (Windows sign-in), shown at the top right.
+  let me = { enabled: false, roles: ['manager', 'reader'], canSave: true, canAdmin: false };
+  const ROLE_NAMES = { admin: 'Admin', manager: 'Report manager', reader: 'Read-only' };
+  async function loadMe() {
+    try { me = await API.me(); } catch (e) { /* keep defaults */ }
+    const bar = document.querySelector('.topbar');
+    if (bar && me.enabled) {
+      let el = bar.querySelector('.who');
+      if (!el) { el = document.createElement('span'); el.className = 'who'; bar.insertBefore(el, bar.querySelector('.conn') || bar.lastElementChild); }
+      const top = me.roles[0];
+      const next = encodeURIComponent(location.pathname + location.hash);
+      const pageSignOut = !!document.getElementById('logoutBtn'); // Settings has its own Sign out button
+      el.innerHTML = me.user
+        ? `${icon('users', 'sm')}<span class="who-name" title="${esc(me.user)}">${esc(me.user)}</span><span class="who-role">${esc(ROLE_NAMES[top] || '')}</span>
+           ${pageSignOut ? '' : '<button class="btn subtle sm" data-signout>Sign out</button>'}`
+        : `<a class="btn subtle sm" href="/auth/windows?next=${next}">${icon('lock', 'sm')}Sign in with Windows</a>`;
+      const so = el.querySelector('[data-signout]');
+      if (so) so.onclick = async () => { await API.signOut().catch(() => {}); location.reload(); };
+    }
+    return me;
+  }
+
+  return { icon, esc, toast, hydrateIcons, copy, updatePill, applyBranding, loadMe, getMe: () => me, showBranding, title, brandName, getBrand: () => brand };
 })();
 
 

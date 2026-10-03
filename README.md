@@ -10,7 +10,7 @@
 </p>
 
 <h3 align="center">
-  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.12/Orynr-IntuneReportBuilder-Setup-2.0.12.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.12.exe, 15 MB)</a>
+  ⬇️ <a href="https://github.com/SKD0007/Intune-Report-Builder/releases/download/v2.0.13/Orynr-IntuneReportBuilder-Setup-2.0.13.exe">Download the Windows installer (Orynr-IntuneReportBuilder-Setup-2.0.13.exe, 15 MB)</a>
 </h3>
 <p align="center">
   Or see <a href="https://github.com/SKD0007/Intune-Report-Builder/releases">all releases</a> · Install steps <a href="#install">below</a>
@@ -44,7 +44,10 @@ Intune Report Builder connects to your Microsoft tenant **read-only** and turns 
 - **Filter, summarize, drill in:** add filters from drop-downs of real values, click a summary bar to narrow down, and click any row to see every detail of that device, user or app.
 - **Export to Excel** with readable headers and values, exactly as you see it.
 - **Update notifier:** an *Update available* button appears when a new version is published, with a direct download link.
-- **Your branding:** show your organisation's name and logo in the top bar and page titles (Settings → Administrative tasks).
+- **Shareable links:** **Copy link** on any report sends a colleague the exact view: columns, filters, search and sort.
+- **Windows sign-in and roles:** use Active Directory (or local Windows) groups for **Admins**, **Report managers** (save and delete shared reports) and **Read-only** viewers. People are signed in with their Windows account automatically; switch it on in Settings → Administrative tasks → Domain sign-in & roles.
+- **Expiry alerts on the home page:** the Apple MDM push certificate, Apple enrollment (ADE) and VPP tokens, and app registration secrets and certificates that have expired or expire soon, with a link to the full report. Admins choose 14, 30, 60 or 90 days ahead.
+- **Your branding:** show your organisation's name and logo in the top bar and page titles (Settings → Administrative tasks → Branding).
 - **No waiting around:** reports Intune has to prepare first show *We're preparing this report*. Wait, cancel, or choose **Notify me** and carry on; the bell at the top right tells you when it's ready, and one click opens it.
 - **Knows your licences:** the app detects whether your tenant has Microsoft Intune, Entra ID P1/P2, Windows 365 and Defender for Endpoint, tags the reports that need something you don't have, and lists what you have in Settings.
 - **Save your own reports:** columns, filters and sort order are saved for the whole team, and the data is always fetched fresh.
@@ -73,7 +76,7 @@ Intune Report Builder connects to your Microsoft tenant **read-only** and turns 
   </tr>
   <tr>
     <td><img src="docs/screenshots/06-build-your-own.png" alt="Build your own report"><br><sub><b>Build your own report</b> from any data source</sub></td>
-    <td><img src="docs/screenshots/08-admin-connection.png" alt="Administrative tasks: connection and permission check"><br><sub><b>Guided setup</b> with a live permission checklist</sub></td>
+    <td><img src="docs/screenshots/08-admin-connection.png" alt="Administrative tasks: permission and licence check"><br><sub><b>Guided setup</b> with a live permission checklist</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/07-settings-themes.png" alt="Theme picker"><br><sub><b>Orynr themes:</b> Silver (default), Gold, Blue, Red, Black, Mist, Navy</sub></td>
@@ -115,7 +118,7 @@ sc start ORIP
 
 ## One-time setup (about 5 minutes)
 
-On the server, open **Settings → Administrative tasks**:
+On the server, open **Settings → Administrative tasks**. Each task has its own tab (Connection, Permissions & licences, Domain sign-in & roles, Branding, Expiry alerts, Admin login, Updates):
 
 1. **Create the admin login** (username and password). Only Administrative tasks need it. Viewing reports and changing the theme don't.
 2. **Connect to Microsoft:** create an app registration in Entra ID (the page walks you through it) and paste the Tenant ID, Client ID and client secret. The secret is stored encrypted and never sent to a browser.
@@ -152,17 +155,30 @@ On the server, open **Settings → Administrative tasks**:
    All Intune reports need a Microsoft Intune licence in the tenant.
 
 4. **Share the link** `http://<server-name>:8080/` with your team.
+5. **Optional: Windows sign-in and roles** (tab *Domain sign-in & roles*). Pick an Active Directory group (`DOMAIN\Group`) or a local Windows group for each role, then switch it on:
+
+| Role | Can do |
+|---|---|
+| **Admins** | Everything, including Settings |
+| **Report managers** | Save, change and delete shared reports |
+| **Read-only** | View reports, filter, export and copy links. Leave the group empty to let everyone on your network view |
+
+   A higher role includes the lower ones. People are signed in with their Windows account (Kerberos or NTLM): silently when the server's address is in the browser's *Local intranet* zone (for example via Group Policy *Site to Zone Assignment List*), otherwise the browser asks once. Use **Test my Windows sign-in** to check. The local admin login always keeps working, so a wrong group can't lock you out. It's off by default: until you switch it on, everyone who can open the link can view and save reports.
+6. **Optional: expiry alerts** (tab *Expiry alerts*). The home page warns everyone about the Apple MDM push certificate, Apple enrollment (ADE) and VPP tokens, and app registration / enterprise app secrets and certificates that have expired or expire soon. Choose 14, 30, 60 or 90 days ahead, or switch it off. Needs DeviceManagementServiceConfig.Read.All (Apple tokens) and Application.Read.All (secrets and certificates).
+7. **Optional: your branding** (tab *Branding*): your organisation's name and logo in the top bar and page titles.
 
 ## Security and privacy
 
 - **Read-only:** the app only ever reads; nothing in your tenant is changed. Requests go only to `graph.microsoft.com`, and all of them are reads (GET) except one kind: for Intune's own built-in reports, it asks Intune to prepare the report (`POST /deviceManagement/reports/exportJobs`) and then downloads it from the temporary Azure Storage link Intune hands back (`*.blob.core.windows.net`). No Microsoft token is ever sent to that link.
-- **Least privilege:** the service runs as the built-in low-privilege *Local Service* account.
+- **Least privilege:** the service runs as the built-in low-privilege *Network Service* account.
 - **Secrets stay on the server:** the client secret is encrypted at rest and never returned to a browser. The admin password is stored only as a salted hash.
 - **Locked-down settings page:** first-time admin setup only works on the server itself, sign-in locks out after repeated wrong passwords, and the web pages are served with strict security headers.
 - **No phone-home:** nothing is sent to Orynr, and none of your tenant data leaves your network.
-- **Update notifier:** once a day the server asks GitHub whether a newer version exists and shows an *Update available* button. Only the app's version number is sent, and nothing is downloaded or installed automatically. Admins can switch it off in **Settings → Administrative tasks**.
+- **Update notifier:** once a day the server asks GitHub whether a newer version exists and shows an *Update available* button. Only the app's version number is sent, and nothing is downloaded or installed automatically. Admins can switch it off in **Settings → Administrative tasks → Updates**.
 
-> Anyone who can open the reports link can see the reports. Share it only with people who should see your device and user data, and keep the firewall option limited to trusted networks.
+- **Windows sign-in (optional):** limit who can view, save or administer with Active Directory groups. Sign-in uses Windows' own Negotiate (Kerberos/NTLM); no passwords pass through the app.
+
+> Unless Windows sign-in is switched on, anyone who can open the reports link can see the reports. Share it only with people who should see your device and user data, and keep the firewall option limited to trusted networks.
 
 ## Uninstall
 

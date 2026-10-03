@@ -355,6 +355,61 @@
     return `<div class="banner info">${icon('info')}<div class="grow"><b>Almost ready.</b>An admin needs to connect this tool to your Microsoft tenant (one-time setup).</div><a class="btn sm primary" href="/settings#/admin">Set up now</a></div>`;
   }
 
+  // =================================================================== expiry alerts (home)
+  // Apple push certificate, Apple tokens, app secrets and certificates that expired recently or expire soon.
+  // Built server-side from the Connectors & tokens and App secrets & certificates reports.
+  const ALERT_SHOW = 5;
+  // from=home: opened from the home page, not a link someone sent (no "Shared view" note).
+  const reportLink = (id, view) => `#/r/${encodeURIComponent(id)}` + (view ? '?v=' + encodeView(view) + '&from=home' : '');
+
+  function alertWhen(i) {
+    const n = i.daysLeft;
+    const date = new Date(dateMs(i.expires) || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const rel = n < 0 ? `Expired ${-n === 1 ? 'yesterday' : -n + ' days ago'}` : n === 0 ? 'Expires today' : n === 1 ? 'Expires tomorrow' : `Expires in ${n} days`;
+    return `${rel} · ${date}`;
+  }
+
+  function alertsHtml() {
+    const a = state.alerts;
+    if (!a || !a.enabled || !a.connected) return '';
+    const checked = ['Apple and connector tokens', 'App secrets and certificates'].filter(w => !a.skipped.some(s => s.what === w));
+    if (!checked.length) return '';
+    const skippedNote = a.skipped.length ? ` <span class="muted small" title="${esc(a.skipped.map(s => s.what + ': ' + s.why).join('\n'))}">(${esc(a.skipped.map(s => s.what.toLowerCase()).join(', '))} couldn't be checked)</span>` : '';
+    const refresh = `<button class="btn sm icon subtle" id="expRefresh" title="Check again${a.checkedAt ? ' (last checked ' + esc(relTime(a.checkedAt * 1000)) + ')' : ''}" aria-label="Check again">${icon('refresh', 'sm')}</button>`;
+    if (!a.items.length) {
+      return `<div class="expiry-ok">${icon('check', 'sm')}<span>Nothing expires in the next ${a.days} days. Checked: ${esc(checked.join(' and ').toLowerCase())}.${skippedNote}</span>${refresh}</div>`;
+    }
+    const shown = state.alertsAll ? a.items : a.items.slice(0, ALERT_SHOW);
+    const sevOf = i => i.daysLeft < 0 || i.daysLeft <= 7 || i.own ? 'bad' : 'warn';
+    const all = { filters: [{ col: 'daysLeft', op: 'gt', value: -a.days - 1 }, { col: 'daysLeft', op: 'lt', value: a.days + 1 }], sort: { col: 'daysLeft', dir: 'asc' } };
+    return `<section class="card expiry" aria-label="Expiry alerts">
+      <div class="expiry-head">${icon('alert')}<h2>Expiring soon</h2><span class="n">${a.items.length}</span>
+        <span class="muted small grow">Expired in the last ${a.days} days or expiring in the next ${a.days}.${skippedNote}</span>
+        <a class="btn sm subtle" href="${reportLink('connectors', all)}">Apple tokens</a>
+        <a class="btn sm subtle" href="${reportLink('app-credentials', all)}">App secrets</a>${refresh}</div>
+      <ul class="expiry-list">${shown.map(i => `<li><a href="${reportLink(i.report, i.find ? { search: i.find } : null)}">
+        <span class="dot ${sevOf(i)}"></span>
+        <span class="what"><b>${esc(i.name || i.kind)}</b><small>${esc(i.kind)}</small>
+          ${i.own ? '<span class="badge bad" title="The secret this app uses to connect to Microsoft. Renew it and enter the new one in Settings, or reports stop working.">This app\'s connection</span>' : ''}</span>
+        <span class="when ${sevOf(i)}">${esc(alertWhen(i))}</span></a></li>`).join('')}</ul>
+      ${a.items.length > ALERT_SHOW ? `<button class="btn sm subtle expiry-more" id="expMore">${state.alertsAll ? 'Show fewer' : `Show all ${a.items.length}`}</button>` : ''}
+    </section>`;
+  }
+
+  function wireAlerts() {
+    const more = document.getElementById('expMore');
+    if (more) more.onclick = () => { state.alertsAll = !state.alertsAll; renderHome(); };
+    const r = document.getElementById('expRefresh');
+    if (r) r.onclick = () => { r.disabled = true; loadAlerts(true); };
+  }
+
+  async function loadAlerts(refresh) {
+    if (!state.status || !state.status.connected) return;
+    try { state.alerts = await API.alerts(refresh); }
+    catch (e) { if (refresh) toast(e.message, 'bad'); return; }
+    if (isHome()) renderHome();
+  }
+
   // =================================================================== home
   function allTiles() {
     const saved = state.saved.map(r => ({ ...r, mine: true, category: 'mine' }));
@@ -374,7 +429,7 @@
         ${lic ? `<span class="tag" title="Your tenant doesn't have ${esc(LICENSE_NAMES[lic])}">${icon('lock', 'sm')}Needs ${esc(LICENSE_NAMES[lic].replace('Microsoft ', ''))}</span>`
           : locked ? `<span class="tag" title="Needs ${esc(permName(src.permission))}">${icon('lock', 'sm')}Needs permission</span>` : ''}
       </span>
-      ${r.mine ? `<button class="btn sm icon subtle del" data-del="${esc(r.id)}" title="Delete this saved report" aria-label="Delete">${icon('trash', 'sm')}</button>` : ''}
+      ${r.mine && UI.getMe().canSave ? `<button class="btn sm icon subtle del" data-del="${esc(r.id)}" title="Delete this saved report" aria-label="Delete">${icon('trash', 'sm')}</button>` : ''}
     </a>`;
   }
 
@@ -418,6 +473,7 @@
         <div class="titles"><h1>Reports</h1><p>Pick a ready-made report or build your own. Reports only read data; nothing in Intune is changed.</p></div>
         <label class="search-box">${icon('search')}<input id="homeSearch" type="search" placeholder="Search reports, e.g. “non-compliant”" value="${esc(h.q)}" aria-label="Search reports"></label>
       </div>
+      ${q ? '' : alertsHtml()}
       <div class="chips" role="tablist">${cats.map(c => `<button class="chip ${h.cat === c.id ? 'active' : ''}" data-cat="${c.id}" role="tab" aria-selected="${h.cat === c.id}">${esc(c.name)}</button>`).join('')}</div>
       <div id="homeBody">${body}</div>
     </div>`;
@@ -430,6 +486,7 @@
       const again = document.getElementById('homeSearch');
       again.focus(); again.setSelectionRange(pos, pos);
     }, 150));
+    wireAlerts();
     $app.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { h.cat = b.dataset.cat; renderHome(); });
     $app.querySelectorAll('[data-del]').forEach(b => b.onclick = async (e) => {
       e.preventDefault(); e.stopPropagation();
@@ -758,8 +815,9 @@
         <div class="titles"><h1>${esc(def.name)}</h1><p>${esc(def.description || v.sourceName)}</p></div>
         <div class="actions">
           <button class="btn" id="refreshBtn" ${v.loading ? 'disabled' : ''}>${icon('refresh', 'sm')}Refresh</button>
+          <button class="btn" id="shareBtn" title="Copy a link to this exact view: columns, filters, search and sort">${icon('copy', 'sm')}Copy link</button>
           <button class="btn" id="exportBtn" ${!v.data || v.loading ? 'disabled' : ''}>${icon('download', 'sm')}Export to Excel</button>
-          <button class="btn ${v.dirty ? 'primary' : ''}" id="saveBtn" ${!v.data || v.loading ? 'disabled' : ''}>${icon('save', 'sm')}${isSaved ? 'Save' : 'Save as my report'}</button>
+          ${UI.getMe().canSave ? `<button class="btn ${v.dirty ? 'primary' : ''}" id="saveBtn" ${!v.data || v.loading ? 'disabled' : ''}>${icon('save', 'sm')}${isSaved ? 'Save' : 'Save as my report'}</button>` : ''}
         </div>
       </div>`;
 
@@ -790,6 +848,7 @@
         <p class="muted">Large tenants can take a minute or two. Please keep this page open.</p>
         <button class="btn" id="cancelBtn">Cancel</button></div></div></div>`;
       document.getElementById('cancelBtn').onclick = () => { v.abort && v.abort.abort(); location.hash = '#/'; };
+      wireShare();
       return;
     }
     if (v.error) {
@@ -837,6 +896,7 @@
     const notices = [];
     if (d.truncated) notices.push(`<div class="banner warn">${icon('alert')}<div class="grow"><b>Only the first ${fmtNum(d.rows.length)} records were loaded.</b>Add a filter to the Graph query, or raise AGB_MAX_ROWS on the server.</div></div>`);
     if (d.notes && d.notes.length) notices.push(`<div class="banner info">${icon('info')}<div class="grow"><b>Some parts couldn't be read, so they're not in this report.</b>${d.notes.map(n => esc(n)).join('<br>')}</div></div>`);
+    if (def.sharedView && !def.isNew) notices.push(`<div class="banner info">${icon('info')}<div class="grow"><b>Shared view.</b>Someone sent you this link with their columns and filters. Change anything you like; it won't affect them.</div></div>`);
     if (def.isNew) notices.push(`<div class="banner info">${icon('wand')}<div class="grow"><b>Step 2 of 2: make it yours.</b>Use <b>Columns</b> to pick what to show, <b>Add filter</b> to narrow it down, then <b>Save as my report</b>.</div></div>`);
 
     $app.innerHTML = `<div class="page wide">${head}${notices.join('')}
@@ -863,12 +923,24 @@
 
   function markDirty() { state.view.dirty = true; }
 
+  function wireShare() {
+    const b = document.getElementById('shareBtn');
+    const v = state.view;
+    if (!b || !v) return;
+    b.onclick = async () => {
+      if (!v.routeBase) return;
+      try { await UI.copy(shareLink(v)); toast('Link copied. Anyone who can open the reports can use it.'); }
+      catch (e) { toast('Copy failed: ' + e.message, 'bad'); }
+    };
+  }
+
   function wireReport(rows) {
     const v = state.view, d = v.data;
     const byId = id => document.getElementById(id);
     byId('refreshBtn').onclick = () => loadData(true);
     byId('exportBtn').onclick = () => exportCsv(rows);
-    byId('saveBtn').onclick = openSave;
+    wireShare();
+    if (byId('saveBtn')) byId('saveBtn').onclick = openSave;
     byId('colsBtn').onclick = openColumns;
     byId('addFilter').onclick = e => openFilter(null, e.currentTarget);
     const clear = byId('clearFilters');
@@ -1130,11 +1202,47 @@
   }
 
   // =================================================================== routing
+  // ------------------------------------------------------------ shareable links
+  // The view (columns, filters, search, sort, summary) travels in the link as ?v=<base64url JSON>.
+  function encodeView(v) {
+    const data = { c: v.columns, f: v.filters, q: v.search || undefined, s: v.sort || undefined, g: v.summaryBy || undefined };
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    let bin = '';
+    bytes.forEach(b => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function decodeView(text) {
+    try {
+      const bin = atob(String(text).replace(/-/g, '+').replace(/_/g, '/'));
+      const d = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0))));
+      const str = (x, n) => typeof x === 'string' && x.length <= (n || 300);
+      const out = {};
+      if (Array.isArray(d.c)) out.columns = d.c.filter(x => str(x)).slice(0, 200);
+      if (Array.isArray(d.f)) out.filters = d.f.filter(f => f && str(f.col) && OPS[f.op]).slice(0, 50)
+        .map(f => ({ col: f.col, op: f.op, value: Array.isArray(f.value) ? f.value.filter(x => ['string', 'number', 'boolean'].includes(typeof x)).slice(0, 200) : f.value }));
+      if (str(d.q, 500)) out.search = d.q;
+      if (d.s && str(d.s.col) && ['asc', 'desc'].includes(d.s.dir)) out.sort = { col: d.s.col, dir: d.s.dir };
+      if (str(d.g)) out.summaryBy = d.g;
+      return out;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function shareLink(v) {
+    return location.origin + location.pathname + v.routeBase + '?v=' + encodeView(v);
+  }
+
   async function route() {
     closeOverlays();
     JOBS.setViewing(null); // leaving a report: a finished background report now shows a notification
     const hash = location.hash || '#/';
-    const [, kind, arg] = hash.match(/^#\/([^/]*)\/?(.*)$/) || [];
+    const [, kind, rawArg = ''] = hash.match(/^#\/([^/]*)\/?(.*)$/) || [];
+    const qAt = rawArg.indexOf('?');
+    const arg = qAt >= 0 ? rawArg.slice(0, qAt) : rawArg;
+    const params = new URLSearchParams(qAt >= 0 ? rawArg.slice(qAt + 1) : '');
+    const shared = qAt >= 0 ? decodeView(params.get('v') || '') : null;
     window.scrollTo(0, 0);
 
     if (!kind) {
@@ -1166,15 +1274,18 @@
       return;
     }
     document.title = UI.title(def.name);
+    if (shared && Object.keys(shared).length) def = { ...def, ...shared, sharedView: params.get('from') !== 'home' };
     const pending = state.pendingView;
     state.pendingView = null;
     if (pending && kind === 'r' && def.mine) {
       // Just saved: keep the current view and data instead of reloading.
       pending.def = def;
+      pending.routeBase = '#/' + kind + '/' + arg;
       state.view = pending;
       return renderReport();
     }
     openReport(def, hash);
+    state.view.routeBase = '#/' + kind + '/' + arg;
   }
 
   function loadSaved() {
@@ -1201,8 +1312,10 @@
   route();
   UI.updatePill();
   UI.applyBranding();
+  UI.loadMe().then(() => { if (isHome()) renderHome(); else if (state.view && !state.view.loading) renderReport(); });
   loadStatus().then(() => {
     if (isHome()) renderHome();
     else if (location.hash === '#/new') renderSourcePicker();
+    loadAlerts(false);
   });
 })();

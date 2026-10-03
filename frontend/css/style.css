@@ -641,3 +641,46 @@ h3.perm-group:first-of-type { margin-top: 4px; }
 .support-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px;
   font-size: 13px; background: var(--warn-soft); color: var(--text); border-bottom: 1px solid var(--border); }
 .support-bar a { font-weight: 600; }
+
+/* ------------------------------------------------------------- signed-in user */
+.who { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.who-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--text); }
+.who-role { padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+.acc-grid { display: grid; gap: 4px; margin: 12px 0 4px; max-width: 560px; }
+@media (max-width: 720px) { .who-name, .who-role { display: none; } }
+
+/* ------------------------------------------------------------- admin tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+.tabs a {
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; margin-bottom: -1px;
+  color: var(--text-2); font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0;
+}
+.tabs a:hover { color: var(--text); background: var(--surface-3); text-decoration: none; }
+.tabs a.active { color: var(--accent-fg); border-bottom-color: var(--accent); font-weight: 600; }
+.tabs a .dot { margin-left: 2px; }
+
+/* ------------------------------------------------------------- expiry alerts (home) */
+.expiry { margin-bottom: 20px; overflow: hidden; }
+.expiry-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.expiry-head > svg.i { color: var(--warn); }
+.expiry-head h2 { font-size: 15px; }
+.expiry-head .n { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+.expiry-head .grow { flex: 1; min-width: 180px; }
+.expiry-list { list-style: none; margin: 0; padding: 0; }
+.expiry-list li + li { border-top: 1px solid var(--border); }
+.expiry-list a { display: flex; align-items: center; gap: 12px; padding: 10px 16px; color: var(--text); }
+.expiry-list a:hover { background: var(--surface-2); text-decoration: none; }
+.expiry-list .what { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.expiry-list .what b { font-weight: 600; overflow-wrap: anywhere; }
+.expiry-list .what small { color: var(--muted); font-size: 12.5px; }
+.expiry-list .when { font-size: 12.5px; white-space: nowrap; font-weight: 600; }
+.expiry-list .when.bad { color: var(--bad); } .expiry-list .when.warn { color: var(--warn); }
+.expiry-more { margin: 6px 10px 10px; }
+.expiry-ok { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 8px 12px; border-radius: var(--radius-sm);
+  background: var(--ok-soft); color: var(--text-2); font-size: 13px; }
+.expiry-ok > svg.i { color: var(--ok); flex: none; }
+.expiry-ok > span { flex: 1; }
+@media (max-width: 600px) {
+  .expiry-list a { flex-wrap: wrap; }
+  .expiry-list .when { width: 100%; padding-left: 20px; white-space: normal; }
+}

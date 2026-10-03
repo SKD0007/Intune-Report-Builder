@@ -10,7 +10,7 @@
   const { icon, esc, toast } = UI;
   const $root = document.getElementById('settings');
   const logoutBtn = document.getElementById('logoutBtn');
-  const VERSION = '2.0.12';
+  const VERSION = '2.0.13';
   let st = null;     // admin state from the server
   let roles = null;  // granted application permissions (null = unknown)
   let licenses = null; // Microsoft licences the tenant has (null = unknown)
@@ -30,6 +30,7 @@
 
   logoutBtn.onclick = async () => {
     await API.admin.logout().catch(() => {});
+    await API.signOut().catch(() => {});
     toast('Signed out');
     st = null;
     location.hash = '#/admin';
@@ -38,12 +39,30 @@
 
   // ------------------------------------------------------------------ shell
   function route() {
-    const h = location.hash.replace(/^#\/?/, '');
+    const h = location.hash.replace(/^#\/?/, '').split('/')[0];
     return ['admin', 'about'].includes(h) ? h : 'appearance';
   }
 
+  // Administrative tasks are split into tabs: #/admin/<tab>.
+  const ADMIN_TABS = [
+    ['connection', 'plug', 'Connection'],
+    ['permissions', 'shield', 'Permissions & licences'],
+    ['access', 'key', 'Domain sign-in & roles'],
+    ['branding', 'sliders', 'Branding'],
+    ['alerts', 'alert', 'Expiry alerts'],
+    ['login', 'lock', 'Admin login'],
+    ['updates', 'download', 'Updates']
+  ];
+  function adminTab() {
+    const t = location.hash.replace(/^#\/?/, '').split('/')[1];
+    return ADMIN_TABS.some(x => x[0] === t) ? t : 'connection';
+  }
+
+  let lastRoute = null;
   function render() {
     const r = route();
+    const sameAdmin = r === 'admin' && lastRoute === 'admin' && st && st.loggedIn;
+    lastRoute = r;
     const nav = [
       ['appearance', 'sliders', 'Appearance'],
       ['admin', 'lock', 'Administrative tasks'],
@@ -58,6 +77,7 @@
     document.title = UI.title({ appearance: 'Appearance', admin: 'Administrative tasks', about: 'About' }[r] + ' · Settings');
     if (r === 'appearance') renderAppearance();
     else if (r === 'about') renderAbout();
+    else if (sameAdmin) { logoutBtn.classList.remove('hidden'); renderAdminMain(); } // switching tabs: no reload
     else loadAdmin();
   }
 
@@ -128,6 +148,44 @@
     });
   }
 
+  // ------------------------------------------------------------------ who can use the app (Windows / AD groups)
+  async function drawAccess() {
+    const box = document.getElementById('accessCard');
+    if (!box) return;
+    let cfg, who;
+    try { [cfg, who] = await Promise.all([API.admin.getAccess(), UI.loadMe()]); }
+    catch (e) { box.innerHTML = `<div class="muted small">${esc(e.message)}</div>`; return; }
+    const g = cfg.groups || {};
+    const me = who.user ? `You're signed in with Windows as <b>${esc(who.user)}</b>.` : (who.localAdmin ? "You're signed in with the local admin login." : '');
+    box.innerHTML = `<div class="step-head"><span class="step-num">${icon('users', 'sm')}</span><div><h2>Who can use the app</h2>
+        <p>Use Windows / Active Directory groups to decide who can view reports, who can save and delete shared reports, and who can change settings. People sign in with their Windows account automatically.</p></div></div>
+      <label class="check"><input type="checkbox" id="accOn" ${cfg.enabled ? 'checked' : ''}> Use Windows sign-in and these groups</label>
+      <div class="acc-grid">
+        <label class="field"><span>Admins <span class="muted" style="font-weight:400">(everything, including Settings)</span></span>
+          <input type="text" id="accAdmin" value="${esc(g.admin || '')}" placeholder="CONTOSO\\Intune Report Admins" spellcheck="false"></label>
+        <label class="field"><span>Report managers <span class="muted" style="font-weight:400">(save, change and delete shared reports)</span></span>
+          <input type="text" id="accManager" value="${esc(g.manager || '')}" placeholder="CONTOSO\\Intune Report Managers" spellcheck="false"></label>
+        <label class="field"><span>Read-only <span class="muted" style="font-weight:400">(view reports; leave empty for everyone on the network)</span></span>
+          <input type="text" id="accReader" value="${esc(g.reader || '')}" placeholder="CONTOSO\\Intune Report Viewers" spellcheck="false"></label>
+      </div>
+      <div class="form-actions"><button class="btn primary" id="accSave">Save</button>
+        <a class="btn" href="/auth/windows?next=${encodeURIComponent('/settings#/admin/access')}">Test my Windows sign-in</a>
+        <span class="inline-msg" id="accMsg"></span></div>
+      <p class="muted small" style="margin-top:8px">${me} Groups can be domain groups (DOMAIN\\Group) or groups on this server. A higher role includes the lower ones.
+        The local admin login always keeps working, so a wrong group can't lock you out. Browsers sign in silently when the server is in the Local intranet zone; otherwise they ask for the Windows account once.</p>`;
+    const msg = document.getElementById('accMsg');
+    document.getElementById('accSave').onclick = async () => {
+      try {
+        await API.admin.saveAccess({ enabled: document.getElementById('accOn').checked,
+          admin: document.getElementById('accAdmin').value.trim() || null,
+          manager: document.getElementById('accManager').value.trim() || null,
+          reader: document.getElementById('accReader').value.trim() || null });
+        showMsg(msg, 'Saved. Everyone signs in again with the new groups.', true);
+        drawAccess();
+      } catch (err) { showMsg(msg, err.message); }
+    };
+  }
+
   // ------------------------------------------------------------------ branding
   async function drawBranding() {
     const box = document.getElementById('brandCard');
@@ -189,7 +247,7 @@
       <div><h2>Updates</h2><p>You have version <b>${esc(u.current)}</b>.</p></div></div>`;
     let body;
     if (!u.enabled) {
-      body = `<p class="muted">Update checks are switched off.${admin ? '' : ' An admin can turn them on in <a href="#/admin">Administrative tasks</a>.'}</p>`;
+      body = `<p class="muted">Update checks are switched off.${admin ? '' : ' An admin can turn them on in <a href="#/admin/updates">Administrative tasks</a>.'}</p>`;
     } else if (u.updateAvailable) {
       body = `<div class="banner info">${icon('download')}<div class="grow"><b>Version ${esc(u.latest)} is available.</b>
           Run the installer on this server as an administrator. It upgrades in place and keeps the port, settings, connection and saved reports.</div></div>
@@ -315,11 +373,17 @@
 
   function renderAdminMain() {
     const connected = st.connected;
-    pane().innerHTML = `
+    const tab = adminTab();
+    document.title = UI.title(ADMIN_TABS.find(x => x[0] === tab)[2] + ' · Administrative tasks');
+    const tabs = `<nav class="tabs" aria-label="Administrative tasks">
+      ${ADMIN_TABS.map(([id, ic, label]) => `<a href="#/admin/${id}" class="${tab === id ? 'active' : ''}" ${tab === id ? 'aria-current="page"' : ''}>${icon(ic, 'sm')}${label}${id === 'connection' && !connected ? '<span class="dot bad" title="Not connected"></span>' : ''}</a>`).join('')}
+    </nav>`;
+    const body = {
+      connection: () => `
       ${st.credentialsUnreadable ? `<div class="banner warn">${icon('alert')}<div class="grow"><b>The saved connection can't be read on this computer.</b>This happens if the data folder was copied from another machine. Enter the details again below.</div></div>` : ''}
 
       <section class="card card-pad">
-        <div class="step-head"><span class="step-num ${connected ? 'done' : ''}">${connected ? icon('check', 'sm') : '1'}</span>
+        <div class="step-head"><span class="step-num ${connected ? 'done' : ''}">${icon(connected ? 'check' : 'plug', 'sm')}</span>
           <div><h2>Connect to Microsoft</h2><p>${connected ? 'Connected. You can update the details below at any time.' : 'Uses an Entra ID app registration with a client secret. Reports are read-only.'}</p></div></div>
         <details class="help" ${connected ? '' : 'open'}>
           <summary>How do I get these values? (5 minutes, one time)</summary>
@@ -327,7 +391,7 @@
             <li>Go to <b>entra.microsoft.com</b> → <b>Applications</b> → <b>App registrations</b> → <b>New registration</b>. Name it “Intune Report Builder”, keep “Single tenant”, leave Redirect URI empty, click <b>Register</b>.</li>
             <li>On the app's <b>Overview</b> page, copy the <b>Application (client) ID</b> and <b>Directory (tenant) ID</b>.</li>
             <li>Open <b>Certificates &amp; secrets</b> → <b>New client secret</b>. Copy the secret's <b>Value</b> right away (it's only shown once). Note when it expires.</li>
-            <li>Open <b>API permissions</b> → <b>Add a permission</b> → <b>Microsoft Graph</b> → <b>Application permissions</b>, and add the permissions listed in step 2 below.</li>
+            <li>Open <b>API permissions</b> → <b>Add a permission</b> → <b>Microsoft Graph</b> → <b>Application permissions</b>, and add the permissions listed on the <a href="#/admin/permissions">Permissions &amp; licences</a> tab.</li>
             <li>Click <b>Grant admin consent</b> (needs a Global or Privileged Role Administrator).</li>
           </ol>
         </details>
@@ -341,27 +405,36 @@
             <span class="inline-msg" id="credMsg"></span>
           </div>
         </form>
+        <hr style="border:0;border-top:1px solid var(--border);margin:20px 0">
+        <div class="form-actions"><button class="btn danger" id="disconnect" ${connected ? '' : 'disabled'}>${icon('trash', 'sm')}Remove Microsoft connection</button>
+          <span class="muted small">Deletes the saved tenant, client ID and secret from this server.</span></div>
       </section>
 
       <section class="card card-pad">
-        <div class="step-head"><span class="step-num" id="permNum">2</span>
-          <div><h2>Check permissions</h2><p>Each permission unlocks a group of reports. Reports whose permission is missing show a “Needs permission” tag.</p></div></div>
+        <div class="step-head"><span class="step-num">${icon('users', 'sm')}</span>
+          <div><h2>Share with your team</h2><p>Your team opens the reports at this address. Who may open them is set on the <a href="#/admin/access">Domain sign-in &amp; roles</a> tab.</p></div></div>
+        <div class="form-actions"><input type="text" readonly value="${esc(location.origin + '/')}" id="shareUrl" style="max-width:380px" class="mono">
+          <button class="btn" id="copyUrl">${icon('copy', 'sm')}Copy link</button></div>
+        <p class="muted small" style="margin-top:8px">If you opened this page as 127.0.0.1, others need this computer's name or IP address instead, for example <code>http://${esc(location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'SERVER-NAME' : location.hostname)}:${esc(location.port || '80')}/</code>.</p>
+      </section>`,
+
+      permissions: () => `
+      <section class="card card-pad">
+        <div class="step-head"><span class="step-num" id="permNum">${icon('check', 'sm')}</span>
+          <div><h2>Permissions</h2><p>Each permission unlocks a group of reports. Reports whose permission is missing show a “Needs permission” tag.</p></div></div>
         <div id="perms"></div>
         <div class="form-actions" style="margin-top:14px">
           <button class="btn" id="recheck" ${connected ? '' : 'disabled'}>${icon('refresh', 'sm')}Re-check</button>
           <button class="btn subtle" id="copyPerms">${icon('copy', 'sm')}Copy permission list</button>
           <span class="muted small">After granting consent it can take a few minutes to show up.</span>
         </div>
-      </section>
+      </section>`,
 
-      <section class="card card-pad">
-        <div class="step-head"><span class="step-num">3</span>
-          <div><h2>Share with your team</h2><p>Anyone on your network can open the reports at this address. They don't need a login.</p></div></div>
-        <div class="form-actions"><input type="text" readonly value="${esc(location.origin + '/')}" id="shareUrl" style="max-width:380px" class="mono">
-          <button class="btn" id="copyUrl">${icon('copy', 'sm')}Copy link</button></div>
-        <p class="muted small" style="margin-top:8px">If you opened this page as 127.0.0.1, others need this computer's name or IP address instead, for example <code>http://${esc(location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'SERVER-NAME' : location.hostname)}:${esc(location.port || '80')}/</code>.</p>
-      </section>
+      access: () => '<section class="card card-pad" id="accessCard"><div class="muted small">Loading…</div></section>',
+      branding: () => '<section class="card card-pad" id="brandCard"><div class="muted small">Loading…</div></section>',
+      alerts: () => '<section class="card card-pad" id="alertCard"><div class="muted small">Loading…</div></section>',
 
+      login: () => `
       <section class="card card-pad">
         <div class="step-head"><span class="step-num">${icon('lock', 'sm')}</span><div><h2>Admin login</h2>
           <p>Change the admin username or password. It's stored as a secure hash (never the password itself) in <code>admin.json</code>, in <code>C:\\ProgramData\\Orynr\\Intune Report Builder</code> on the server.</p></div></div>
@@ -371,19 +444,53 @@
           <label class="field"><span>Current password</span><input type="password" id="cur" autocomplete="current-password" required><small>Needed to confirm any change.</small></label>
           <div class="form-actions"><button class="btn" type="submit">Save login</button><span class="inline-msg" id="pwMsg"></span></div>
         </form>
-        <hr style="border:0;border-top:1px solid var(--border);margin:20px 0">
-        <div class="form-actions"><button class="btn danger" id="disconnect" ${connected ? '' : 'disabled'}>${icon('trash', 'sm')}Remove Microsoft connection</button>
-          <span class="muted small">Deletes the saved tenant, client ID and secret from this server.</span></div>
-      </section>
+      </section>`,
 
-      <section class="card card-pad" id="brandCard"></section>
+      updates: () => '<section class="card card-pad" id="updCard"><div class="muted small">Checking for updates…</div></section>'
+    }[tab]();
 
-      <section class="card card-pad" id="updCard"><div class="muted small">Checking for updates…</div></section>`;
+    pane().innerHTML = tabs + body;
+    if (tab === 'connection') wireConnection();
+    else if (tab === 'permissions') { drawPermissions(); wirePermissions(); }
+    else if (tab === 'access') drawAccess();
+    else if (tab === 'branding') drawBranding();
+    else if (tab === 'alerts') drawAlertSettings();
+    else if (tab === 'login') wireLogin();
+    else if (tab === 'updates') loadUpdate(true);
+  }
 
-    drawPermissions();
-    wireAdmin();
-    drawBranding();
-    loadUpdate(true);
+  // ------------------------------------------------------------------ expiry alerts (settings)
+  async function drawAlertSettings() {
+    const box = document.getElementById('alertCard');
+    if (!box) return;
+    let cfg, now = null;
+    try { cfg = await API.admin.getAlerts(); }
+    catch (e) { box.innerHTML = `<div class="muted small">${esc(e.message)}</div>`; return; }
+    if (cfg.enabled && st.connected) now = await API.alerts().catch(() => null);
+    if (!document.getElementById('alertCard')) return;
+    const summary = !st.connected ? 'Connect to Microsoft first.' :
+      !cfg.enabled ? 'Alerts are switched off.' :
+      !now ? '' :
+      now.items.length ? `<b>${now.items.length}</b> item${now.items.length === 1 ? '' : 's'} on the <a href="/">home page</a> right now.` :
+      `Nothing expires in the next ${now.days} days.`;
+    const skipped = now && now.skipped && now.skipped.length
+      ? `<div class="banner warn" style="margin:12px 0 0">${icon('alert')}<div class="grow"><b>Some items couldn't be checked.</b>${now.skipped.map(s => `${esc(s.what)}: ${esc(s.why)}`).join('<br>')}</div></div>` : '';
+    box.innerHTML = `<div class="step-head"><span class="step-num">${icon('alert', 'sm')}</span><div><h2>Expiry alerts on the home page</h2>
+        <p>Warn everyone on the home page when something your devices or integrations depend on has expired or is about to:
+          the Apple MDM push certificate, Apple enrollment (ADE) and VPP tokens, and client secrets and certificates on app registrations and enterprise apps.</p></div></div>
+      <label class="check"><input type="checkbox" id="alOn" ${cfg.enabled ? 'checked' : ''}> Show expiry alerts on the home page</label>
+      <label class="field" style="max-width:260px;margin-top:10px"><span>Warn this many days ahead</span>
+        <select id="alDays">${cfg.choices.map(d => `<option value="${d}" ${d === cfg.days ? 'selected' : ''}>${d} days</option>`).join('')}</select></label>
+      <div class="form-actions"><button class="btn primary" id="alSave">Save</button><span class="inline-msg" id="alMsg"></span></div>
+      <p class="small" style="margin-top:12px">${summary}</p>${skipped}
+      <p class="muted small" style="margin-top:8px">Uses the <a href="/#/r/connectors">Connectors &amp; tokens</a> and <a href="/#/r/app-credentials">App secrets &amp; certificates</a> reports
+        (permissions DeviceManagementServiceConfig.Read.All and Application.Read.All). Checked at most once an hour; the refresh button on the home page checks right away.
+        A secret that has already been replaced by a newer one isn't shown.</p>`;
+    document.getElementById('alSave').onclick = async () => {
+      const msg = document.getElementById('alMsg');
+      try { await API.admin.saveAlerts(document.getElementById('alOn').checked, Number(document.getElementById('alDays').value)); toast('Expiry alerts saved'); drawAlertSettings(); }
+      catch (err) { showMsg(msg, err.message); }
+    };
   }
 
   // What the tenant is licensed for (read from its subscriptions), and what each licence unlocks here.
@@ -428,7 +535,7 @@
     if (num && known && okCount === core.length) { num.className = 'step-num done'; num.innerHTML = icon('check', 'sm'); }
   }
 
-  function wireAdmin() {
+  function wireConnection() {
     document.getElementById('credForm').onsubmit = async (e) => {
       e.preventDefault();
       const btn = document.getElementById('saveCred'), msg = document.getElementById('credMsg');
@@ -445,7 +552,7 @@
         toast('Connected to Microsoft');
         await loadAdmin();
         const m = document.getElementById('credMsg');
-        if (m) showMsg(m, 'Connected and saved.', true);
+        if (m) { showMsg(m, 'Connected and saved. ', true); m.insertAdjacentHTML('beforeend', 'Next: <a href="#/admin/permissions">check permissions</a>.'); }
       } catch (err) {
         showMsg(msg, err.message);
       } finally {
@@ -453,6 +560,19 @@
       }
     };
 
+    document.getElementById('copyUrl').onclick = async () => {
+      try { await UI.copy(document.getElementById('shareUrl').value); toast('Link copied'); }
+      catch (err) { toast('Copy failed: ' + err.message, 'bad'); }
+    };
+
+    document.getElementById('disconnect').onclick = async () => {
+      if (!window.confirm('Remove the Microsoft connection? Reports will stop working until someone connects again.')) return;
+      try { await API.admin.disconnect(); roles = null; toast('Connection removed'); loadAdmin(); }
+      catch (err) { toast(err.message, 'bad'); }
+    };
+  }
+
+  function wirePermissions() {
     document.getElementById('recheck').onclick = async (e) => {
       const btn = e.currentTarget; btn.disabled = true;
       try { roles = (await API.admin.test()).roles || []; const s = await API.status().catch(() => null); if (s) licenses = s.licenses; drawPermissions(); toast('Permissions re-checked'); }
@@ -464,11 +584,9 @@
       try { await UI.copy(C.PERMISSIONS.filter(p => !p.optional).map(p => p.name).join('\n')); toast('Core permission list copied'); }
       catch (err) { toast('Copy failed: ' + err.message, 'bad'); }
     };
-    document.getElementById('copyUrl').onclick = async () => {
-      try { await UI.copy(document.getElementById('shareUrl').value); toast('Link copied'); }
-      catch (err) { toast('Copy failed: ' + err.message, 'bad'); }
-    };
+  }
 
+  function wireLogin() {
     document.getElementById('pwForm').onsubmit = async (e) => {
       e.preventDefault();
       const msg = document.getElementById('pwMsg');
@@ -481,16 +599,11 @@
         showMsg(msg, 'Admin login saved.', true);
       } catch (err) { showMsg(msg, err.message); }
     };
-
-    document.getElementById('disconnect').onclick = async () => {
-      if (!window.confirm('Remove the Microsoft connection? Reports will stop working until someone connects again.')) return;
-      try { await API.admin.disconnect(); roles = null; toast('Connection removed'); loadAdmin(); }
-      catch (err) { toast(err.message, 'bad'); }
-    };
   }
 
   window.addEventListener('hashchange', render);
   render();
   UI.updatePill();
   UI.applyBranding();
+  UI.loadMe();
 })();
