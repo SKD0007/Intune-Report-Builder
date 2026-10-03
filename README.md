@@ -47,7 +47,7 @@ Intune Report Builder connects to your Microsoft tenant **read-only** and turns 
 - **Shareable links:** **Copy link** on any report sends a colleague the exact view: columns, filters, search and sort.
 - **Windows sign-in and roles:** use Active Directory (or local Windows) groups for **Admins**, **Report managers** (save and delete shared reports) and **Read-only** viewers. People are signed in with their Windows account automatically; switch it on in Settings → Administrative tasks → Domain sign-in & roles.
 - **Expiry alerts on the home page:** the Apple MDM push certificate, Apple enrollment (ADE) and VPP tokens, and app registration secrets and certificates that have expired or expire soon, with a link to the full report. Admins choose 14, 30, 60 or 90 days ahead.
-- **Your branding:** show your organisation's name and logo in the top bar and page titles (Settings → Administrative tasks → Branding).
+- **Your branding:** show your organisation's name and logo in the top bar and page titles (Settings → Administrative tasks → Branding). Pages arrive already branded, so the default logo never flashes up.
 - **No waiting around:** reports Intune has to prepare first show *We're preparing this report*. Wait, cancel, or choose **Notify me** and carry on; the bell at the top right tells you when it's ready, and one click opens it.
 - **Knows your licences:** the app detects whether your tenant has Microsoft Intune, Entra ID P1/P2, Windows 365 and Defender for Endpoint, tags the reports that need something you don't have, and lists what you have in Settings.
 - **Save your own reports:** columns, filters and sort order are saved for the whole team, and the data is always fetched fresh.
@@ -172,6 +172,7 @@ On the server, open **Settings → Administrative tasks**. Each task has its own
 - **Read-only:** the app only ever reads; nothing in your tenant is changed. Requests go only to `graph.microsoft.com`, and all of them are reads (GET) except one kind: for Intune's own built-in reports, it asks Intune to prepare the report (`POST /deviceManagement/reports/exportJobs`) and then downloads it from the temporary Azure Storage link Intune hands back (`*.blob.core.windows.net`). No Microsoft token is ever sent to that link.
 - **Least privilege:** the service runs as the built-in low-privilege *Network Service* account.
 - **Secrets stay on the server:** the client secret is encrypted at rest and never returned to a browser. The admin password is stored only as a salted hash.
+- **Tenant details stay with admins:** people viewing reports only see *Connected to Microsoft*. The tenant ID and client ID are shown only to admins on the Connection tab, and IDs in Microsoft's sign-in error messages are hidden.
 - **Locked-down settings page:** first-time admin setup only works on the server itself, sign-in locks out after repeated wrong passwords, and the web pages are served with strict security headers.
 - **No phone-home:** nothing is sent to Orynr, and none of your tenant data leaves your network.
 - **Update notifier:** once a day the server asks GitHub whether a newer version exists and shows an *Update available* button. Only the app's version number is sent, and nothing is downloaded or installed automatically. Admins can switch it off in **Settings → Administrative tasks → Updates**.

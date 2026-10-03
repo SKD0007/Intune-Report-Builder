@@ -336,12 +336,12 @@
     const s = state.status;
     if (!s) { el.innerHTML = '<span class="dot warn"></span><span class="txt">Checking connection…</span>'; return; }
     if (s.connected) {
-      el.innerHTML = `<span class="dot ok"></span><span class="txt">Connected · ${esc(s.tenantId)}</span>`;
-      el.title = 'Connected to tenant ' + s.tenantId;
+      el.innerHTML = '<span class="dot ok"></span><span class="txt">Connected to Microsoft</span>';
+      el.title = 'Connected to Microsoft Graph (read-only)';
     } else if (s.offline) {
       el.innerHTML = '<span class="dot bad"></span><span class="txt">Server not reachable</span>';
     } else {
-      el.innerHTML = `<span class="dot bad"></span><span class="txt">${s.tenantId ? 'Sign-in problem' : 'Not set up'}</span>`;
+      el.innerHTML = `<span class="dot bad"></span><span class="txt">${s.configured ? 'Sign-in problem' : 'Not set up'}</span>`;
       el.title = s.error || 'Not connected';
     }
   }
